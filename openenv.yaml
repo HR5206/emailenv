@@ -23,12 +23,12 @@ tags:
   - reply-generation
 metadata:
   tasks:
-    - id: emailenv-spam-classification
+    - id: spam_classification
       name: Spam classification
       difficulty: easy
-    - id: emailenv-email-prioritization
+    - id: email_prioritization
       name: Email prioritization
       difficulty: medium
-    - id: emailenv-reply-generation
+    - id: reply_generation
       name: Reply generation
       difficulty: hard
