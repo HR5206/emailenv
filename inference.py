@@ -25,7 +25,8 @@ from typing import Dict, List, Optional
 
 from openai import OpenAI
 
-from emailenv import EmailEnv, Action
+from emailenv_class import EmailEnv
+from models import Action, TaskType, AgentAction, ErrorResponse
 
 
 # ---------------------------------------------------------------------------
@@ -307,35 +308,93 @@ def run_episode() -> None:
     score = 0.0
     success = False
 
-    log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
+    # The environment now runs a fixed 3-task sequence (spam, priority, reply),
+    # so we treat this as a single multi-task episode for logging.
+    log_start(task="multi", env=BENCHMARK, model=MODEL_NAME)
 
     try:
-        observation = env.reset(task=TASK_NAME)  # type: ignore[arg-type]
+        # New API: reset() returns a ResetResponse with the first EmailTask.
+        _ = env.reset()
         done = False
 
         while not done and steps_taken < MAX_STEPS:
-            email = observation.email
+            state = env.state()
+            current_task = state.current_task
 
-            if email is None:
-                action = Action(type="skip")
-            elif TASK_NAME == "spam_classification":
-                action = _build_spam_action(client, email.subject, email.body, email.sender)
-            elif TASK_NAME == "email_prioritization":
-                action = _build_priority_action(client, email.subject, email.body, email.sender)
-            elif TASK_NAME == "reply_generation":
-                action = _build_reply_action(client, email.subject, email.body, email.sender)
+            if current_task is None:
+                # Episode is finished.
+                break
+
+            subject = current_task.subject
+            body = current_task.body
+            sender = current_task.sender
+
+            # Choose an OpenEnv-style Action based on the current task type.
+            if current_task.task_type == TaskType.SPAM:
+                action = _build_spam_action(client, subject, body, sender)
+            elif current_task.task_type == TaskType.PRIORITY:
+                action = _build_priority_action(client, subject, body, sender)
+            elif current_task.task_type == TaskType.REPLY:
+                action = _build_reply_action(client, subject, body, sender)
             else:
-                # Unknown task: safest is to no‑op.
                 action = Action(type="skip")
 
             action_str = _format_action_for_log(action)
 
+            # Map the Action into the environment's AgentAction.
+            action_value: Optional[str]
+            if action.type == "classify_spam" and action.is_spam is not None:
+                action_value = "spam" if action.is_spam else "not_spam"
+            elif action.type == "set_priority" and action.priority is not None:
+                action_value = action.priority
+            elif action.type == "generate_reply" and action.reply_text is not None:
+                action_value = action.reply_text
+            elif action.type == "skip":
+                action_value = "skip"
+            else:
+                action_value = None
+
+            if action_value is None:
+                steps_taken += 1
+                log_step(
+                    step=steps_taken,
+                    action=action_str,
+                    reward=0.0,
+                    done=True,
+                    error=f"Invalid action payload for type={action.type}",
+                )
+                break
+
+            agent_action = AgentAction(
+                task_id=current_task.task_id,
+                action_value=action_value,
+            )
+
             try:
-                observation, reward, done, _info = env.step(action)
-                reward_value = float(getattr(reward, "value", 0.0) or 0.0)
+                result = env.step(agent_action)
+                # env.step can return StepResult or ErrorResponse.
+                if isinstance(result, ErrorResponse):
+                    steps_taken += 1
+                    log_step(
+                        step=steps_taken,
+                        action=action_str,
+                        reward=0.0,
+                        done=True,
+                        error=result.error,
+                    )
+                    break
+
+                reward_value = float(result.reward or 0.0)
                 rewards.append(reward_value)
                 steps_taken += 1
-                log_step(step=steps_taken, action=action_str, reward=reward_value, done=done, error=None)
+                done = result.done
+                log_step(
+                    step=steps_taken,
+                    action=action_str,
+                    reward=reward_value,
+                    done=done,
+                    error=None,
+                )
             except Exception as step_exc:  # pragma: no cover - defensive
                 steps_taken += 1
                 log_step(
