@@ -1,20 +1,4 @@
-"""EmailEnv Inference Script
-
-This script implements the standardized inference interface expected by the
-benchmark harness. It:
-
-- Reads configuration from environment variables (API endpoint, model name, etc.).
-- Uses the OpenAI client for all LLM calls when credentials are provided.
-- Interacts with the EmailEnv environment one step at a time.
-- Logs progress to stdout using the required three-line format:
-
-    [START] task=<task_name> env=<benchmark> model=<model_name>
-    [STEP]  step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
-    [END]   success=<true|false> steps=<n> score=<score> rewards=<r1,r2,...,rn>
-
-The script is intentionally self‑contained so that the benchmark can simply run
-`python inference.py` from the project root.
-"""
+"""EmailEnv Inference Script"""
 
 from __future__ import annotations
 
@@ -28,82 +12,50 @@ from openai import OpenAI
 from emailenv_class import EmailEnv
 from models import Action, TaskType, AgentAction, ErrorResponse
 
-
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
-# API / model configuration (must match the active inference setup).
 API_BASE_URL: str = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
-MODEL_NAME: str = os.getenv("MODEL_NAME", "gpt-5-nano")
-
-# Primary API key for OpenAI / HF router style endpoints.
+MODEL_NAME: str = os.getenv("MODEL_NAME", "gpt-4o-mini")
 API_KEY: Optional[str] = (
     os.getenv("HF_TOKEN")
     or os.getenv("API_KEY")
     or os.getenv("OPENAI_API_KEY")
 )
+BENCHMARK: str = "emailenv"
+MAX_STEPS: int = 10
+TEMPERATURE: float = 0.0
+MAX_TOKENS: int = 256
+SUCCESS_SCORE_THRESHOLD: float = 0.5
 
-# Environment configuration.
-TASK_NAME: str = os.getenv("EMAILENV_TASK", "spam_classification")
-BENCHMARK: str = os.getenv("EMAILENV_BENCHMARK", "emailenv")
-
-# Optional docker image name (not used directly here, but included to align
-# with the generic OpenENV spec).
-LOCAL_IMAGE_NAME: Optional[str] = os.getenv("LOCAL_IMAGE_NAME") or os.getenv("IMAGE_NAME")
-
-# Inference hyperparameters.
-TEMPERATURE: float = float(os.getenv("EMAILENV_TEMPERATURE", "0.0"))
-MAX_TOKENS: int = int(os.getenv("EMAILENV_MAX_TOKENS", "256"))
-MAX_STEPS: int = int(os.getenv("EMAILENV_MAX_STEPS", "512"))
-
-# Threshold in [0, 1] for deciding whether the episode is a success based on
-# the normalized score.
-SUCCESS_SCORE_THRESHOLD: float = float(os.getenv("EMAILENV_SUCCESS_THRESHOLD", "0.5"))
+TASK_SEQUENCE = [
+    "spam_classification",
+    "email_prioritization",
+    "reply_generation",
+]
 
 
 # ---------------------------------------------------------------------------
-# Logging helpers (STDOUT contract)
+# Logging
 # ---------------------------------------------------------------------------
-
 
 def log_start(task: str, env: str, model: str) -> None:
-    """Log the beginning of an episode.
-
-    Format: [START] task=<task_name> env=<benchmark> model=<model_name>
-    """
-
     print(f"[START] task={task} env={env} model={model}", flush=True)
 
 
 def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
-    """Log a single environment step.
-
-    Format: [STEP] step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
-    """
-
-    done_val = str(done).lower()
     error_val = error if error else "null"
-    # Ensure there are no newlines within a line.
+    done_val = str(done).lower()
     action_clean = action.replace("\n", " ")
-    error_clean = error_val.replace("\n", " ") if error_val is not None else "null"
     print(
         f"[STEP] step={step} action={action_clean} reward={reward:.2f} "
-        f"done={done_val} error={error_clean}",
+        f"done={done_val} error={error_val}",
         flush=True,
     )
 
 
 def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
-    """Log the end of an episode.
-
-    Format: [END] success=<true|false> steps=<n> score=<score> rewards=<r1,r2,...,rn>
-    """
-
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     print(
-        f"[END] success={str(success).lower()} steps={steps} score={score:.2f} "
-        f"rewards={rewards_str}",
+        f"[END] success={str(success).lower()} steps={steps} "
+        f"score={score:.2f} rewards={rewards_str}",
         flush=True,
     )
 
@@ -112,28 +64,13 @@ def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> No
 # LLM helpers
 # ---------------------------------------------------------------------------
 
-
 def _get_client() -> Optional[OpenAI]:
-    """Create an OpenAI client if an API key is available.
-
-    When no API key is provided, this returns ``None`` and the policy falls
-    back to lightweight rule‑based behavior so the script can still run
-    without network access. When a key *is* provided, all decisions are
-    delegated to the model via the OpenAI Client, as required by the spec.
-    """
-
     if not API_KEY:
         return None
     return OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
 
 
 def _call_openai(client: OpenAI, system_prompt: str, user_prompt: str) -> str:
-    """Call the chat completion API and return trimmed content.
-
-    Any exception is surfaced to the caller, which can then decide how to
-    recover. This keeps the core behavior simple for the benchmark harness.
-    """
-
     response = client.chat.completions.create(
         model=MODEL_NAME,
         messages=[
@@ -144,45 +81,30 @@ def _call_openai(client: OpenAI, system_prompt: str, user_prompt: str) -> str:
         max_tokens=MAX_TOKENS,
         stream=False,
     )
-    choice = response.choices[0]
-    content = choice.message.content or ""
-    return content.strip()
+    return (response.choices[0].message.content or "").strip()
 
 
 def _parse_json(content: str) -> Dict:
-    """Best‑effort JSON parsing that tolerates extra text around a JSON blob."""
-
     try:
         return json.loads(content)
     except Exception:
         start = content.find("{")
         end = content.rfind("}")
         if start != -1 and end != -1 and end > start:
-            snippet = content[start : end + 1]
             try:
-                return json.loads(snippet)
+                return json.loads(content[start:end + 1])
             except Exception:
                 return {}
         return {}
 
 
 # ---------------------------------------------------------------------------
-# Simple heuristic fallbacks (used only when no API key is configured)
+# Heuristic fallbacks
 # ---------------------------------------------------------------------------
-
 
 def _heuristic_is_spam(subject: str, body: str) -> bool:
     text = (subject + " " + body).lower()
-    spam_keywords = [
-        "discount",
-        "offer",
-        "congratulations",
-        "winner",
-        "prize",
-        "lottery",
-        "free",
-    ]
-    return any(k in text for k in spam_keywords)
+    return any(k in text for k in ["discount", "offer", "congratulations", "winner", "prize", "lottery", "free"])
 
 
 def _heuristic_priority(subject: str, body: str) -> str:
@@ -196,95 +118,70 @@ def _heuristic_priority(subject: str, body: str) -> str:
 
 def _heuristic_reply(subject: str, body: str) -> str:
     return (
-        "Thank you for your email regarding '" + subject + "'. "
-        "We have received your message and are looking into this. "
-        "We will get back to you with an update as soon as possible."
+        f"Thank you for reaching out regarding '{subject}'. "
+        "We appreciate your message and sincerely apologize for any inconvenience. "
+        "Our team has received your request and will look into this promptly. "
+        "Please feel free to reply if you have additional questions. "
+        "Best regards, Support Team"
     )
 
 
 # ---------------------------------------------------------------------------
-# Action builders for each EmailEnv task
+# Action builders
 # ---------------------------------------------------------------------------
-
 
 def _build_spam_action(client: Optional[OpenAI], subject: str, body: str, sender: str) -> Action:
     if client is None:
-        is_spam = _heuristic_is_spam(subject, body)
-        return Action(type="classify_spam", is_spam=is_spam)
-
+        return Action(type="classify_spam", is_spam=_heuristic_is_spam(subject, body))
     system_prompt = (
         "You classify emails as spam or not spam. "
-        "Respond only with JSON: {\"type\":\"classify_spam\",\"is_spam\":true|false}."
+        'Respond only with JSON: {"type":"classify_spam","is_spam":true|false}.'
     )
-    user_prompt = f"Subject: {subject}\nSender: {sender}\nBody: {body}"
-
     try:
-        content = _call_openai(client, system_prompt, user_prompt)
-        data = _parse_json(content)
-        is_spam = bool(data.get("is_spam", False))
+        data = _parse_json(_call_openai(client, system_prompt, f"Subject: {subject}\nSender: {sender}\nBody: {body}"))
+        return Action(type="classify_spam", is_spam=bool(data.get("is_spam", False)))
     except Exception:
-        is_spam = _heuristic_is_spam(subject, body)
-
-    return Action(type="classify_spam", is_spam=is_spam)
+        return Action(type="classify_spam", is_spam=_heuristic_is_spam(subject, body))
 
 
 def _build_priority_action(client: Optional[OpenAI], subject: str, body: str, sender: str) -> Action:
     if client is None:
-        priority_raw = _heuristic_priority(subject, body)
-    else:
-        system_prompt = (
-            "You assign a priority level to customer emails. "
-            "Respond only with JSON: {\"type\":\"set_priority\",\"priority\":\"low\"|\"medium\"|\"high\"}."
-        )
-        user_prompt = f"Subject: {subject}\nSender: {sender}\nBody: {body}"
-        try:
-            content = _call_openai(client, system_prompt, user_prompt)
-            data = _parse_json(content)
-            priority_raw = str(data.get("priority", "medium")).lower()
-        except Exception:
-            priority_raw = _heuristic_priority(subject, body)
-
-    if priority_raw not in {"low", "medium", "high"}:
-        priority_raw = "medium"
-
-    return Action(type="set_priority", priority=priority_raw)
+        return Action(type="set_priority", priority=_heuristic_priority(subject, body))
+    system_prompt = (
+        "You assign priority to customer emails. "
+        'Respond only with JSON: {"type":"set_priority","priority":"low"|"medium"|"high"}.'
+    )
+    try:
+        data = _parse_json(_call_openai(client, system_prompt, f"Subject: {subject}\nSender: {sender}\nBody: {body}"))
+        priority = str(data.get("priority", "medium")).lower()
+        if priority not in {"low", "medium", "high"}:
+            priority = "medium"
+        return Action(type="set_priority", priority=priority)
+    except Exception:
+        return Action(type="set_priority", priority=_heuristic_priority(subject, body))
 
 
 def _build_reply_action(client: Optional[OpenAI], subject: str, body: str, sender: str) -> Action:
     if client is None:
-        reply_text = _heuristic_reply(subject, body)
-        return Action(type="generate_reply", reply_text=reply_text)
-
+        return Action(type="generate_reply", reply_text=_heuristic_reply(subject, body))
     system_prompt = (
-        "You write professional, concise, and helpful customer support replies. "
-        "Respond only with JSON: {\"type\":\"generate_reply\",\"reply_text\":\"...\"}."
+        "You write professional, polite customer support replies. "
+        'Respond only with JSON: {"type":"generate_reply","reply_text":"..."}.'
     )
-    user_prompt = f"Subject: {subject}\nSender: {sender}\nBody: {body}"
-
     try:
-        content = _call_openai(client, system_prompt, user_prompt)
-        data = _parse_json(content)
-        reply_text = str(data.get("reply_text", "")).strip()
-        if not reply_text:
-            reply_text = _heuristic_reply(subject, body)
+        data = _parse_json(_call_openai(client, system_prompt, f"Subject: {subject}\nSender: {sender}\nBody: {body}"))
+        reply = str(data.get("reply_text", "")).strip() or _heuristic_reply(subject, body)
+        return Action(type="generate_reply", reply_text=reply)
     except Exception:
-        reply_text = _heuristic_reply(subject, body)
-
-    return Action(type="generate_reply", reply_text=reply_text)
+        return Action(type="generate_reply", reply_text=_heuristic_reply(subject, body))
 
 
-def _format_action_for_log(action: Action) -> str:
-    """Create a compact, one‑line string representation of an Action.
-
-    This is used only for logging; it does not affect environment behavior.
-    """
-
+def _format_action_log(action: Action) -> str:
     if action.type == "classify_spam":
         return f"classify_spam(is_spam={str(bool(action.is_spam)).lower()})"
     if action.type == "set_priority":
         return f"set_priority(priority={action.priority})"
     if action.type == "generate_reply":
-        # Truncate long replies in logs to keep lines readable.
         snippet = (action.reply_text or "").replace("\n", " ")
         if len(snippet) > 80:
             snippet = snippet[:77] + "..."
@@ -293,43 +190,35 @@ def _format_action_for_log(action: Action) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Episode runner
+# Single task episode runner
 # ---------------------------------------------------------------------------
 
+def run_episode(task_name: str, client: Optional[OpenAI]) -> None:
+    """Run one episode logged under the given task_name."""
 
-def run_episode() -> None:
-    """Run a single EmailEnv episode and emit the required logs."""
+    log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
 
-    client = _get_client()
     env = EmailEnv()
+    env.reset(seed=42)
 
     rewards: List[float] = []
     steps_taken = 0
+    done = False
     score = 0.0
     success = False
 
-    # The environment now runs a fixed 3-task sequence (spam, priority, reply),
-    # so we treat this as a single multi-task episode for logging.
-    log_start(task="multi", env=BENCHMARK, model=MODEL_NAME)
-
     try:
-        # New API: reset() returns a ResetResponse with the first EmailTask.
-        _ = env.reset()
-        done = False
-
         while not done and steps_taken < MAX_STEPS:
             state = env.state()
             current_task = state.current_task
 
             if current_task is None:
-                # Episode is finished.
                 break
 
             subject = current_task.subject
             body = current_task.body
             sender = current_task.sender
 
-            # Choose an OpenEnv-style Action based on the current task type.
             if current_task.task_type == TaskType.SPAM:
                 action = _build_spam_action(client, subject, body, sender)
             elif current_task.task_type == TaskType.PRIORITY:
@@ -339,105 +228,57 @@ def run_episode() -> None:
             else:
                 action = Action(type="skip")
 
-            action_str = _format_action_for_log(action)
+            action_str = _format_action_log(action)
 
-            # Map the Action into the environment's AgentAction.
-            action_value: Optional[str]
             if action.type == "classify_spam" and action.is_spam is not None:
                 action_value = "spam" if action.is_spam else "not_spam"
             elif action.type == "set_priority" and action.priority is not None:
                 action_value = action.priority
             elif action.type == "generate_reply" and action.reply_text is not None:
                 action_value = action.reply_text
-            elif action.type == "skip":
-                action_value = "skip"
             else:
-                action_value = None
+                action_value = "skip"
 
-            if action_value is None:
-                steps_taken += 1
-                log_step(
-                    step=steps_taken,
-                    action=action_str,
-                    reward=0.0,
-                    done=True,
-                    error=f"Invalid action payload for type={action.type}",
-                )
-                break
-
-            agent_action = AgentAction(
-                task_id=current_task.task_id,
-                action_value=action_value,
-            )
+            agent_action = AgentAction(task_id=current_task.task_id, action_value=action_value)
 
             try:
                 result = env.step(agent_action)
-                # env.step can return StepResult or ErrorResponse.
                 if isinstance(result, ErrorResponse):
                     steps_taken += 1
-                    log_step(
-                        step=steps_taken,
-                        action=action_str,
-                        reward=0.0,
-                        done=True,
-                        error=result.error,
-                    )
+                    log_step(step=steps_taken, action=action_str, reward=0.0, done=True, error=result.error)
+                    done = True
                     break
 
                 reward_value = float(result.reward or 0.0)
                 rewards.append(reward_value)
                 steps_taken += 1
                 done = result.done
-                log_step(
-                    step=steps_taken,
-                    action=action_str,
-                    reward=reward_value,
-                    done=done,
-                    error=None,
-                )
-            except Exception as step_exc:  # pragma: no cover - defensive
+                log_step(step=steps_taken, action=action_str, reward=reward_value, done=done, error=None)
+
+            except Exception as exc:
                 steps_taken += 1
-                log_step(
-                    step=steps_taken,
-                    action=action_str,
-                    reward=0.0,
-                    done=True,
-                    error=str(step_exc),
-                )
+                log_step(step=steps_taken, action=action_str, reward=0.0, done=True, error=str(exc))
                 done = True
 
-        # Compute normalized score in [0, 1]. EmailEnv ensures each per‑step
-        # reward is already in [0, 1], so we simply average across steps.
-        if rewards:
-            score = sum(rewards) / float(len(rewards))
-            if score < 0.0:
-                score = 0.0
-            if score > 1.0:
-                score = 1.0
-        else:
-            score = 0.0
-
+        score = sum(rewards) / len(rewards) if rewards else 0.0
+        score = max(0.0, min(1.0, score))
         success = score >= SUCCESS_SCORE_THRESHOLD
 
-    except Exception as exc:  # pragma: no cover - defensive
-        # If reset or any outer logic fails, we still need to emit an [END]
-        # line. No steps were taken, and success is False.
-        steps_taken = max(steps_taken, 0)
-        rewards.clear()
-        score = 0.0
-        success = False
-        # Emit a synthetic step log to capture the error for debugging while
-        # still respecting the contract that [STEP] lines follow env.step().
-        # Here we skip that and rely on the [END] line; additional debug
-        # information goes to stderr.
+    except Exception as exc:
         print(f"[DEBUG] Episode failed: {exc}", file=sys.stderr, flush=True)
 
     finally:
         log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
 
+# ---------------------------------------------------------------------------
+# Main — run 3 separate episodes, one per task
+# ---------------------------------------------------------------------------
+
 def main() -> None:
-    run_episode()
+    client = _get_client()
+    for task_name in TASK_SEQUENCE:
+        run_episode(task_name, client)
 
 
 if __name__ == "__main__":
