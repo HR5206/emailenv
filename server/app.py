@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI, Body
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from emailenv_class import EmailEnv
 from models import (
@@ -61,6 +61,20 @@ class StepResponse(BaseModel):
 	done: bool
 	feedback: Optional[str]
 	correct_answer: Optional[str] = None
+
+
+class GraderInfo(BaseModel):
+	type: str
+	path: str
+	function: str
+
+
+class TaskInfo(BaseModel):
+	id: str
+	name: str
+	description: str
+	difficulty: str
+	grader: GraderInfo
 
 
 @app.get("/web", response_class=HTMLResponse)
@@ -151,6 +165,46 @@ async def home():
 	</div>
 </body>
 </html>"""
+
+
+@app.get("/tasks", response_model=List[TaskInfo])
+async def tasks():
+	"""List all tasks with grader info - required by OpenEnv validator."""
+	return [
+		TaskInfo(
+			id="spam_classification",
+			name="Spam Classification",
+			description="Classify an incoming email as spam or not_spam.",
+			difficulty="easy",
+			grader=GraderInfo(
+				type="python",
+				path="graders.py",
+				function="grade_spam",
+			),
+		),
+		TaskInfo(
+			id="email_prioritization",
+			name="Email Prioritization",
+			description="Assign a priority level (high, medium, low) to an incoming email.",
+			difficulty="medium",
+			grader=GraderInfo(
+				type="python",
+				path="graders.py",
+				function="grade_priority",
+			),
+		),
+		TaskInfo(
+			id="reply_generation",
+			name="Reply Generation",
+			description="Draft a polite, relevant, and appropriately-lengthed reply to an email.",
+			difficulty="hard",
+			grader=GraderInfo(
+				type="python",
+				path="graders.py",
+				function="grade_reply",
+			),
+		),
+	]
 
 
 @app.post("/reset", response_model=ResetResponse)
@@ -276,4 +330,3 @@ def main():
 
 if __name__ == "__main__":
 	main()
-
