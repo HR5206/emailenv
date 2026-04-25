@@ -4,8 +4,9 @@ import json
 import random
 from knowledge_base import KnowledgeBase, KBEntry
 from models import (
-    Ticket, HelpdeskAction, HelpdeskEnvState,
-    StepResult, ErrorResponse, AgentRole, SupportTier
+    Ticket, HelpdeskAction, HelpdeskEnvState, HelpdeskResetResponse,
+    StepResult, ErrorResponse, AgentRole, SupportTier,
+    EmailTask, TaskType, AgentAction,
 )
 from tasks import get_all_ticket_scenarios
 from graders import (
@@ -44,14 +45,14 @@ class HelpdeskEnv:
     """
 
     def __init__(self):
-        self._kb = KnowledgeBase()
+        self._kb = KnowledgeBase()       # Created ONCE, shared across episodes
         self._state = HelpdeskEnvState()
         self._tickets: list[Ticket] = []
         self._current_ticket_idx: int = 0
         self._ticket_resolved: bool = False
         self._triage_done: bool = False
 
-    def reset(self, seed: int = None, num_tickets: int = 3) -> dict:
+    def reset(self, seed: int = None, num_tickets: int = 3) -> HelpdeskResetResponse:
         """Start a new episode. KB is NOT reset (self-improvement)."""
         all_scenarios = get_all_ticket_scenarios()
         if seed is not None:
@@ -80,12 +81,12 @@ class HelpdeskEnv:
             escalation_count=0,
         )
 
-        return {
-            "ticket": self._tickets[0].model_dump(),
-            "current_agent": AgentRole.TRIAGE.value,
-            "total_tickets": len(self._tickets),
-            "kb_size": self._kb.size(),
-        }
+        return HelpdeskResetResponse(
+            ticket=self._tickets[0],
+            current_agent=AgentRole.TRIAGE,
+            total_tickets=len(self._tickets),
+            kb_size=self._kb.size(),
+        )
 
     def step(self, action: HelpdeskAction) -> StepResult | ErrorResponse:
         """Process an agent action. Routes by role and action_type."""

@@ -1,7 +1,8 @@
-"""EmailEnv - OpenEnv environment for email triage and customer support."""
+"""HelpdeskEnv — Multi-Agent IT Helpdesk OpenEnv Environment."""
 
-from env import EmailEnv
+from helpdeskenv_class import HelpdeskEnv
 from models import (
+    # Round 1 models (kept for backward compat per master prompt)
     Email,
     Observation,
     Action,
@@ -14,10 +15,21 @@ from models import (
     EnvState,
     ResetResponse,
     ErrorResponse,
+    # Round 2 enums
+    TicketCategory,
+    AgentRole,
+    TicketPriority,
+    SupportTier,
+    # Round 2 models
+    Ticket,
+    HelpdeskAction,
+    HelpdeskEnvState,
+    HelpdeskResetResponse,
 )
 
 __all__ = [
-    "EmailEnv",
+    "HelpdeskEnv",
+    # Round 1
     "Email",
     "Observation",
     "Action",
@@ -30,4 +42,13 @@ __all__ = [
     "EnvState",
     "ResetResponse",
     "ErrorResponse",
+    # Round 2
+    "TicketCategory",
+    "AgentRole",
+    "TicketPriority",
+    "SupportTier",
+    "Ticket",
+    "HelpdeskAction",
+    "HelpdeskEnvState",
+    "HelpdeskResetResponse",
 ]

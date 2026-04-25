@@ -1,3 +1,9 @@
+"""FastAPI server for the HelpdeskEnv multi-agent IT helpdesk.
+
+Thin wrapper — ALL logic lives in HelpdeskEnv. The server only
+serializes/deserializes and forwards to the environment.
+"""
+
 import os
 import logging
 from fastapi import FastAPI, Body
@@ -6,67 +12,35 @@ from pydantic import BaseModel
 from typing import Any, Dict, List, Optional
 
 from helpdeskenv_class import HelpdeskEnv
-from emailenv_class import EmailEnv
 from models import (
-	Action,
-	Observation,
-	State,
-	Reward,
-	ResetResponse,
-	EmailTask,
-	EnvState,
-	AgentAction,
-	HelpdeskAction,
-	HelpdeskEnvState,
-	AgentRole,
+    HelpdeskAction,
+    HelpdeskEnvState,
+    HelpdeskResetResponse,
+    StepResult,
+    ErrorResponse,
+    AgentRole,
 )
-
 
 # Configure structured logging
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger(__name__)
 
-# Environment variables configuration
+# Environment variables
 API_BASE_URL: str = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
 MODEL_NAME: str = os.getenv("MODEL_NAME", "gpt-5-nano")
-LOCAL_IMAGE_NAME: str = os.getenv("LOCAL_IMAGE_NAME", "")
 
 app = FastAPI(title="HelpdeskEnv", version="2.0.0")
 _env = HelpdeskEnv()
-_email_env = EmailEnv()  # Keep backward compat
 
 
 class ResetRequest(BaseModel):
-	task: Optional[str] = None
+    seed: Optional[int] = None
+    num_tickets: Optional[int] = 3
 
-	class Config:
-		json_schema_extra = {
-			"example": {"task": "spam_classification"}
-		}
-
-
-class StepRequest(BaseModel):
-	action: Action
-
-	class Config:
-		json_schema_extra = {
-			"example": {
-				"action": {
-					"type": "classify_spam",
-					"is_spam": True,
-					"priority": None,
-					"reply_text": None,
-				}
-			}
-		}
-
-
-class StepResponse(BaseModel):
-	task_id: str
-	reward: float
-	done: bool
-	feedback: Optional[str]
-	correct_answer: Optional[str] = None
+    class Config:
+        json_schema_extra = {
+            "example": {"seed": 42, "num_tickets": 3}
+        }
 
 
 # ============================================================================
@@ -75,325 +49,291 @@ class StepResponse(BaseModel):
 
 @app.get("/health")
 async def health() -> Dict[str, str]:
-	"""Health check endpoint — must return 'healthy' for OpenEnv validator."""
-	return {"status": "healthy"}
+    """Health check endpoint — must return 'healthy' for OpenEnv validator."""
+    return {"status": "healthy"}
 
 
 @app.get("/metadata")
 async def metadata() -> Dict[str, Any]:
-	"""Environment metadata — required by OpenEnv validator."""
-	return {
-		"name": "HelpdeskEnv",
-		"description": "A multi-agent OpenEnv environment simulating an IT helpdesk with triage, tiered support, SLA tracking, and self-improving Knowledge Base.",
-		"version": "2.0.0",
-		"author": "HelpdeskEnv Maintainers",
-	}
-
+    """Environment metadata — required by OpenEnv validator."""
+    return {
+        "name": "HelpdeskEnv",
+        "description": (
+            "Multi-agent IT helpdesk simulation with triage, "
+            "tiered support, SLA tracking, and knowledge base learning"
+        ),
+        "version": "2.0.0",
+        "author": "HelpdeskEnv Maintainers",
+    }
 
 
 @app.get("/schema")
 async def schema() -> Dict[str, Any]:
-	"""Action/observation/state schemas — required by OpenEnv validator."""
-	return {
-		"action": {
-			"type": "object",
-			"properties": {
-				"type": {"type": "string", "enum": [
-					"classify_spam", "set_priority", "generate_reply", "skip",
-					"classify_category", "assign_tier", "search_kb", "apply_solution",
-					"respond_to_customer", "escalate", "request_info", "diagnose",
-					"deep_diagnose", "apply_fix", "apply_complex_fix", "write_kb_entry"
-				]},
-				"is_spam": {"type": "boolean", "nullable": True},
-				"priority": {"type": "string", "enum": ["low", "medium", "high", "critical"], "nullable": True},
-				"reply_text": {"type": "string", "nullable": True},
-				"agent_role": {"type": "string", "enum": ["triage", "l1", "l2", "l3"], "nullable": True},
-				"ticket_id": {"type": "string", "nullable": True},
-				"action_value": {"type": "string", "nullable": True},
-			},
-			"required": ["type"],
-		},
-		"observation": {
-			"type": "object",
-			"properties": {
-				"task_id": {"type": "string"},
-				"task_type": {"type": "string"},
-				"subject": {"type": "string"},
-				"sender": {"type": "string"},
-				"body": {"type": "string"},
-				"context": {"type": "string", "nullable": True},
-				"ticket_id": {"type": "string"},
-				"category": {"type": "string"},
-				"current_agent": {"type": "string", "nullable": True},
-			},
-		},
-		"state": {
-			"type": "object",
-			"properties": {
-				"current_task": {"type": "object", "nullable": True},
-				"current_ticket": {"type": "object", "nullable": True},
-				"current_agent": {"type": "string", "nullable": True},
-				"task_number": {"type": "integer"},
-				"ticket_number": {"type": "integer"},
-				"total_reward": {"type": "number"},
-				"is_done": {"type": "boolean"},
-				"kb_entries_added": {"type": "integer"},
-				"escalation_count": {"type": "integer"},
-			},
-		},
-	}
-
+    """Action/observation/state schemas — required by OpenEnv validator."""
+    return {
+        "action": {
+            "type": "object",
+            "properties": {
+                "ticket_id": {"type": "string"},
+                "agent_role": {
+                    "type": "string",
+                    "enum": ["triage", "l1", "l2", "l3"],
+                },
+                "action_type": {
+                    "type": "string",
+                    "enum": [
+                        "classify_category", "set_priority", "assign_tier",
+                        "search_kb", "apply_solution", "respond_to_customer",
+                        "escalate", "request_info", "diagnose",
+                        "deep_diagnose", "apply_fix", "apply_complex_fix",
+                        "write_kb_entry",
+                    ],
+                },
+                "action_value": {"type": "string"},
+            },
+            "required": ["ticket_id", "agent_role", "action_type", "action_value"],
+        },
+        "observation": {
+            "type": "object",
+            "properties": {
+                "ticket_id": {"type": "string"},
+                "category": {"type": "string"},
+                "subject": {"type": "string"},
+                "sender": {"type": "string"},
+                "body": {"type": "string"},
+                "context": {"type": "string", "nullable": True},
+                "current_agent": {"type": "string"},
+            },
+        },
+        "state": {
+            "type": "object",
+            "properties": {
+                "current_ticket": {"type": "object", "nullable": True},
+                "current_agent": {"type": "string", "nullable": True},
+                "ticket_number": {"type": "integer"},
+                "total_tickets": {"type": "integer"},
+                "total_reward": {"type": "number"},
+                "steps_on_current_ticket": {"type": "integer"},
+                "is_done": {"type": "boolean"},
+                "kb_entries_added": {"type": "integer"},
+                "escalation_count": {"type": "integer"},
+            },
+        },
+    }
 
 
 @app.get("/tasks")
 async def tasks() -> List[Dict[str, Any]]:
-	"""List all tasks with grader info — required by OpenEnv validator."""
-	return [
-		{
-			"id": "spam_classification",
-			"name": "Spam Classification",
-			"description": "Classify an incoming email as spam or not_spam.",
-			"difficulty": "easy",
-			"grader": {
-				"type": "python",
-				"path": "graders.py",
-				"function": "grade_spam",
-			},
-		},
-		{
-			"id": "email_prioritization",
-			"name": "Email Prioritization",
-			"description": "Assign a priority level (high, medium, low) to an incoming email.",
-			"difficulty": "medium",
-			"grader": {
-				"type": "python",
-				"path": "graders.py",
-				"function": "grade_priority",
-			},
-		},
-		{
-			"id": "reply_generation",
-			"name": "Reply Generation",
-			"description": "Draft a polite, relevant, and appropriately-lengthed reply to an email.",
-			"difficulty": "hard",
-			"grader": {
-				"type": "python",
-				"path": "graders.py",
-				"function": "grade_reply",
-			},
-		},
-		{
-			"id": "ticket_triage",
-			"name": "Ticket Triage",
-			"description": "Classify incoming ticket: category, priority, and support tier.",
-			"difficulty": "easy",
-			"grader": {
-				"type": "python",
-				"path": "graders.py",
-				"function": "grade_triage",
-			},
-		},
-		{
-			"id": "ticket_resolution",
-			"name": "Ticket Resolution",
-			"description": "Resolve IT support tickets through diagnosis and solution application.",
-			"difficulty": "medium",
-			"grader": {
-				"type": "python",
-				"path": "graders.py",
-				"function": "grade_reply",
-			},
-		},
-		{
-			"id": "kb_contribution",
-			"name": "Knowledge Base Contribution",
-			"description": "Document novel solutions for future retrieval — self-improvement mechanism.",
-			"difficulty": "hard",
-			"grader": {
-				"type": "python",
-				"path": "graders.py",
-				"function": "grade_kb_contribution",
-			},
-		},
-	]
-
+    """List all tasks with grader info — required by OpenEnv validator."""
+    return [
+        {
+            "id": "ticket_triage",
+            "name": "Ticket Triage",
+            "description": "Classify incoming ticket: category, priority, and support tier.",
+            "difficulty": "easy",
+            "grader": {
+                "type": "python",
+                "path": "graders.py",
+                "function": "grade_triage",
+            },
+        },
+        {
+            "id": "ticket_resolution",
+            "name": "Ticket Resolution",
+            "description": "Resolve IT support tickets through diagnosis and solution application.",
+            "difficulty": "medium",
+            "grader": {
+                "type": "python",
+                "path": "graders.py",
+                "function": "grade_reply",
+            },
+        },
+        {
+            "id": "kb_contribution",
+            "name": "Knowledge Base Contribution",
+            "description": "Document novel solutions for future retrieval — self-improvement mechanism.",
+            "difficulty": "hard",
+            "grader": {
+                "type": "python",
+                "path": "graders.py",
+                "function": "grade_kb_contribution",
+            },
+        },
+    ]
 
 
 @app.post("/mcp")
 async def mcp(body: Dict[str, Any] = Body(default={})) -> Dict[str, Any]:
-	"""MCP JSON-RPC endpoint — required by OpenEnv validator."""
-	return {
-		"jsonrpc": "2.0",
-		"id": body.get("id", 1),
-		"result": {
-			"name": "HelpdeskEnv",
-			"description": "Email triage environment",
-		},
-	}
+    """MCP JSON-RPC endpoint — required by OpenEnv validator."""
+    return {
+        "jsonrpc": "2.0",
+        "id": body.get("id", 1),
+        "result": {
+            "name": "HelpdeskEnv",
+            "description": (
+                "Multi-agent IT helpdesk simulation with triage, "
+                "tiered support, SLA tracking, and knowledge base learning"
+            ),
+        },
+    }
 
 
 # ============================================================================
-# Original API endpoints (unchanged)
+# Homepage
 # ============================================================================
 
 @app.get("/web", response_class=HTMLResponse)
 async def home():
-	"""Serve the homepage."""
-	return """<!DOCTYPE html>
-<html lang=\"en\">
+    """Serve the homepage."""
+    return """<!DOCTYPE html>
+<html lang="en">
 <head>
-	<meta charset=\"UTF-8\">
-	<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
-	<title>EmailEnv</title>
-	<style>
-		* { margin: 0; padding: 0; box-sizing: border-box; }
-		body { 
-			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-			min-height: 100vh;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			padding: 20px;
-		}
-		.container {
-			background: white;
-			border-radius: 10px;
-			box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-			padding: 40px;
-			max-width: 600px;
-			text-align: center;
-		}
-		h1 { color: #333; margin-bottom: 10px; font-size: 2.5em; }
-		.emoji { font-size: 3em; display: block; margin: 20px 0; }
-		p { color: #666; line-height: 1.8; margin: 15px 0; }
-		.tasks { background: #f5f5f5; border-radius: 8px; padding: 20px; margin: 25px 0; text-align: left; }
-		.tasks h2 { color: #333; margin-bottom: 15px; font-size: 1.2em; }
-		.task-item { padding: 10px 0; border-bottom: 1px solid #ddd; }
-		.task-item:last-child { border-bottom: none; }
-		.task-item strong { color: #667eea; }
-		.links { margin-top: 30px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-		a { display: inline-block; padding: 10px 20px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; transition: background 0.3s; }
-		a:hover { background: #764ba2; }
-	</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HelpdeskEnv</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 40px;
+            max-width: 600px;
+            text-align: center;
+        }
+        h1 { color: #333; margin-bottom: 10px; font-size: 2.5em; }
+        .emoji { font-size: 3em; display: block; margin: 20px 0; }
+        p { color: #666; line-height: 1.8; margin: 15px 0; }
+        .tasks { background: #f5f5f5; border-radius: 8px; padding: 20px; margin: 25px 0; text-align: left; }
+        .tasks h2 { color: #333; margin-bottom: 15px; font-size: 1.2em; }
+        .task-item { padding: 10px 0; border-bottom: 1px solid #ddd; }
+        .task-item:last-child { border-bottom: none; }
+        .task-item strong { color: #667eea; }
+        .links { margin-top: 30px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+        a { display: inline-block; padding: 10px 20px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; transition: background 0.3s; }
+        a:hover { background: #764ba2; }
+    </style>
 </head>
 <body>
-	<div class=\"container\">
-		<span class=\"emoji\">📧</span>
-		<h1>EmailEnv</h1>
-		<p><strong>OpenEnv environment for email triage and customer support</strong></p>
-		<div class=\"tasks\">
-			<h2>Tasks</h2>
-			<div class=\"task-item\"><strong>Spam Detection</strong> - Classify emails as spam or legitimate</div>
-			<div class=\"task-item\"><strong>Prioritization</strong> - Assign priority levels (low/medium/high)</div>
-			<div class=\"task-item\"><strong>Reply Generation</strong> - Generate customer support replies</div>
-		</div>
-		<div class=\"links\">
-			<a href=\"/docs\">API Docs</a>
-			<a href=\"https://github.com/HR5206/emailenv\">🔗 GitHub</a>
-		</div>
-	</div>
+    <div class="container">
+        <span class="emoji">🎫</span>
+        <h1>HelpdeskEnv</h1>
+        <p><strong>Multi-Agent IT Helpdesk — OpenEnv Environment v2.0</strong></p>
+        <p>4 specialized agents (Triage, L1, L2, L3) collaborate to resolve IT tickets with a self-improving Knowledge Base.</p>
+        <div class="tasks">
+            <h2>Tasks</h2>
+            <div class="task-item"><strong>Ticket Triage</strong> — Classify category, priority, and support tier</div>
+            <div class="task-item"><strong>Ticket Resolution</strong> — Diagnose and resolve IT support tickets</div>
+            <div class="task-item"><strong>KB Contribution</strong> — Document novel solutions for future retrieval</div>
+        </div>
+        <div class="tasks">
+            <h2>Agents</h2>
+            <div class="task-item"><strong>Triage</strong> — Routes tickets to the right team</div>
+            <div class="task-item"><strong>L1 Support</strong> — Handles simple issues (password resets, etc.)</div>
+            <div class="task-item"><strong>L2 Support</strong> — Handles medium-complexity issues</div>
+            <div class="task-item"><strong>L3 Support</strong> — Handles complex issues + writes KB articles</div>
+        </div>
+        <div class="links">
+            <a href="/docs">API Docs</a>
+            <a href="https://github.com/HR5206/emailenv">GitHub</a>
+        </div>
+    </div>
 </body>
 </html>"""
 
 
-@app.post("/reset", response_model=ResetResponse)
+# ============================================================================
+# Core HelpdeskEnv endpoints (thin wrapper)
+# ============================================================================
+
+@app.post("/reset", response_model=HelpdeskResetResponse)
 async def reset(body: Optional[ResetRequest] = Body(None)):
-	"""Reset the environment."""
-	try:
-		logger.info(f"[START] task=multi env=emailenv model={MODEL_NAME}")
-		result = _env.reset(seed=None)
-		return ResetResponse(
-			observation=result.observation,
-			available_tasks=[
-				"spam_classification",
-				"email_prioritization",
-				"reply_generation",
-			],
-		)
-	except Exception as e:
-		logger.error(f"[RESET ERROR] {str(e)}")
-		raise
+    """Reset the environment and get the first ticket."""
+    try:
+        seed = body.seed if body else None
+        num_tickets = body.num_tickets if body and body.num_tickets else 3
+        logger.info(f"[START] task=helpdesk env=helpdeskenv model={MODEL_NAME}")
+        result = _env.reset(seed=seed, num_tickets=num_tickets)
+        return result
+    except Exception as e:
+        logger.error(f"[RESET ERROR] {str(e)}")
+        raise
 
 
-@app.post("/step", response_model=StepResponse)
-async def step(body: Action | StepRequest = Body(...)):
-	"""Take a step in the environment."""
-	try:
-		if isinstance(body, StepRequest):
-			action = body.action
-		else:
-			action = body
+@app.post("/step")
+async def step(action: HelpdeskAction = Body(...)):
+    """Take a step in the environment with a HelpdeskAction.
 
-		current_state = _env.state()
-		current_task = current_state.current_task
+    The server does NOT interpret the action — it passes it directly
+    to HelpdeskEnv.step() which handles all routing and grading.
+    """
+    try:
+        action_str = f"agent={action.agent_role.value} type={action.action_type}"
+        result = _env.step(action)
 
-		if not current_task:
-			raise ValueError("No current task. Call /reset first.")
+        if isinstance(result, ErrorResponse):
+            logger.info(
+                f"[STEP] step=error action={action_str} reward=0.00 "
+                f"done=false error={result.error}"
+            )
+            return result
 
-		action_value = None
-		if action.type == "classify_spam" and action.is_spam is not None:
-			action_value = "spam" if action.is_spam else "not_spam"
-		elif action.type == "set_priority" and action.priority is not None:
-			action_value = action.priority
-		elif action.type == "generate_reply" and action.reply_text is not None:
-			action_value = action.reply_text
-		elif action.type == "skip":
-			action_value = "skip"
-		else:
-			raise ValueError(f"Invalid action: {action.type}")
-
-		agent_action = AgentAction(
-			task_id=current_task.task_id,
-			action_value=action_value,
-		)
-
-		action_str = f"type={action.type}"
-		result = _env.step(agent_action)
-
-		logger.info(
-			f"[STEP] step={result.task_id} action={action_str} "
-			f"reward={result.reward:.2f} done={str(result.done).lower()} error=null"
-		)
-
-		return StepResponse(
-			task_id=result.task_id,
-			reward=result.reward,
-			done=result.done,
-			feedback=result.feedback,
-			correct_answer=result.correct_answer,
-		)
-	except Exception as e:
-		logger.info(
-			f"[STEP] step=unknown action=unknown reward=0.00 done=false error={str(e)}"
-		)
-		raise
+        logger.info(
+            f"[STEP] step={result.task_id} action={action_str} "
+            f"reward={result.reward:.2f} done={str(result.done).lower()} error=null"
+        )
+        return result
+    except Exception as e:
+        logger.info(
+            f"[STEP] step=unknown action=unknown reward=0.00 done=false error={str(e)}"
+        )
+        raise
 
 
-@app.get("/state", response_model=EnvState)
-async def state() -> EnvState:
-	"""Return the current environment state."""
-	return _env.state()
+@app.get("/state", response_model=HelpdeskEnvState)
+async def state() -> HelpdeskEnvState:
+    """Return the current environment state."""
+    return _env.state()
+
+
+# ============================================================================
+# Knowledge Base endpoints
+# ============================================================================
 
 @app.get("/kb")
 async def get_kb():
-	"""Return the current Knowledge Base contents and stats."""
-	return {
-		"entries": [e.model_dump() for e in _env.kb().get_all()],
-		"stats": _env.kb().stats(),
-	}
+    """Return the current Knowledge Base contents and stats."""
+    return {
+        "entries": [e.model_dump() for e in _env.kb().get_all()],
+        "stats": _env.kb().stats(),
+    }
+
 
 @app.post("/kb/search")
 async def search_kb(body: dict = Body(...)):
-	"""Search the Knowledge Base."""
-	query = body.get("query", "")
-	results = _env.kb().search(query)
-	return {"results": [r.model_dump() for r in results]}
+    """Search the Knowledge Base."""
+    query = body.get("query", "")
+    results = _env.kb().search(query)
+    return {"results": [r.model_dump() for r in results]}
+
+
+# ============================================================================
+# Entry point
+# ============================================================================
 
 def main():
-	import uvicorn
-	uvicorn.run(app, host="0.0.0.0", port=7860)
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=7860)
 
 
 if __name__ == "__main__":
-	main()
+    main()
