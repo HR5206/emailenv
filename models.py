@@ -1,8 +1,9 @@
-"""Consolidated models for the EmailEnv environment.
+"""Consolidated models for the HelpdeskEnv environment.
 
 Contains all Pydantic models used across the application:
-- EmailEnv OpenEnv models (Email, Observation, Action, State, Reward)
-- Task and grading models (EmailTask, AgentAction, StepResult, EnvState, etc.)
+- OpenEnv base models (Email, Observation, Action, State, Reward)
+- Round 1 task/grading models (EmailTask, AgentAction, StepResult, EnvState)
+- Round 2 helpdesk models (Ticket, HelpdeskAction, HelpdeskEnvState, etc.)
 """
 
 from datetime import datetime
@@ -34,7 +35,7 @@ except Exception:  # type: ignore
 
 
 # ============================================================================
-# Email and OpenEnv Models
+# OpenEnv Base Models (Round 1 — kept untouched per master prompt Part 1)
 # ============================================================================
 
 class Email(BaseModel):
@@ -48,7 +49,7 @@ class Email(BaseModel):
 
 
 class Observation(OpenEnvObservation):
-    """Observation from the EmailEnv environment."""
+    """Observation from the environment."""
     email: Optional[Email] = None
     task: Literal["spam_classification", "email_prioritization", "reply_generation"]
     step_index: int
@@ -57,7 +58,7 @@ class Observation(OpenEnvObservation):
 
 
 class Action(OpenEnvAction):
-    """Action submitted to the EmailEnv environment."""
+    """Action submitted to the environment."""
     type: Literal["classify_spam", "set_priority", "generate_reply", "skip"]
     is_spam: Optional[bool] = None
     priority: Optional[Literal["low", "medium", "high"]] = None
@@ -65,7 +66,7 @@ class Action(OpenEnvAction):
 
 
 class State(OpenEnvState):
-    """State snapshot of the EmailEnv environment."""
+    """State snapshot of the environment."""
     current_email_index: int
     total_emails: int
     completed: bool
@@ -73,19 +74,19 @@ class State(OpenEnvState):
 
 
 class Reward(OpenEnvReward):
-    """Reward signal from the EmailEnv environment."""
+    """Reward signal from the environment."""
     value: float
     task_scores: Dict[str, float] = Field(default_factory=dict)
     done: bool = False
 
 
 # ============================================================================
-# Task and Grading Models
+# Task and Grading Models (Round 1 — kept untouched per master prompt Part 1)
 # ============================================================================
 
 class TaskType(str, Enum):
     """
-    Defines the three task types in EmailEnv.
+    Defines the three task types used by the Round 1 graders.
     Using str + Enum means the values are plain strings
     (e.g. "spam", "priority", "reply") - easy to use in JSON.
     """
@@ -93,37 +94,6 @@ class TaskType(str, Enum):
     PRIORITY = "priority"
     REPLY = "reply"
 
-
-class TicketCategory(str, Enum):
-    """Categories for helpdesk tickets."""
-    PASSWORD_RESET = "password_reset"
-    SOFTWARE_INSTALL = "software_install"
-    NETWORK_OUTAGE = "network_outage"
-    DATA_RECOVERY = "data_recovery"
-    NOVEL_ISSUE = "novel_issue"
-
-
-class AgentRole(str, Enum):
-    """The four agent roles in the helpdesk."""
-    TRIAGE = "triage"
-    L1 = "l1"
-    L2 = "l2"
-    L3 = "l3"
-
-
-class TicketPriority(str, Enum):
-    """Priority levels for tickets."""
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
-
-
-class SupportTier(str, Enum):
-    """Which support tier should handle this ticket."""
-    L1 = "l1"
-    L2 = "l2"
-    L3 = "l3"
 
 class EmailTask(BaseModel):
     """
@@ -207,6 +177,47 @@ class EnvState(BaseModel):
         description="List of all past StepResults in this episode"
     )
 
+
+# ============================================================================
+# Round 2 — Helpdesk Enums (Part 1)
+# ============================================================================
+
+class TicketCategory(str, Enum):
+    """Categories for helpdesk tickets."""
+    PASSWORD_RESET = "password_reset"
+    SOFTWARE_INSTALL = "software_install"
+    NETWORK_OUTAGE = "network_outage"
+    DATA_RECOVERY = "data_recovery"
+    NOVEL_ISSUE = "novel_issue"
+
+
+class AgentRole(str, Enum):
+    """The four agent roles in the helpdesk."""
+    TRIAGE = "triage"
+    L1 = "l1"
+    L2 = "l2"
+    L3 = "l3"
+
+
+class TicketPriority(str, Enum):
+    """Priority levels for tickets (4-level scale including critical)."""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class SupportTier(str, Enum):
+    """Which support tier should handle this ticket."""
+    L1 = "l1"
+    L2 = "l2"
+    L3 = "l3"
+
+
+# ============================================================================
+# Round 2 — Helpdesk Models (Parts 1-2)
+# ============================================================================
+
 class Ticket(BaseModel):
     """A helpdesk ticket — the core observation unit in Round 2."""
     ticket_id: str = Field(..., description="Unique ticket identifier")
@@ -220,6 +231,7 @@ class Ticket(BaseModel):
     ground_truth_resolution: Optional[str] = Field(None)
     sla_steps: int = Field(default=5, description="Max steps before SLA breach")
     requires_kb_article: bool = Field(default=False, description="Should agent write a KB entry?")
+
 
 class HelpdeskAction(BaseModel):
     """Action submitted by any agent in the helpdesk."""
@@ -236,6 +248,7 @@ class HelpdeskAction(BaseModel):
     )
     action_value: str = Field(..., description="The agent's answer or payload")
 
+
 class HelpdeskEnvState(BaseModel):
     """Extended state for the multi-agent helpdesk."""
     current_ticket: Optional[Ticket] = None
@@ -249,6 +262,7 @@ class HelpdeskEnvState(BaseModel):
     kb_entries_added: int = 0
     escalation_count: int = 0
 
+
 class HelpdeskResetResponse(BaseModel):
     """Returned when the helpdesk environment is reset."""
     ticket: Ticket = Field(..., description="The first ticket to process")
@@ -260,9 +274,10 @@ class HelpdeskResetResponse(BaseModel):
         description="List of available task types"
     )
 
+
 class ResetResponse(BaseModel):
     """
-    Returned when the agent calls reset() to start a new episode.
+    Returned when the agent calls reset() to start a new episode (Round 1).
     Gives the agent its first task.
     """
     observation: EmailTask = Field(
@@ -294,7 +309,7 @@ __all__ = [
     "Action",
     "State",
     "Reward",
-    # Task models
+    # Round 1 task models
     "TaskType",
     "EmailTask",
     "AgentAction",
@@ -302,11 +317,12 @@ __all__ = [
     "EnvState",
     "ResetResponse",
     "ErrorResponse",
-
+    # Round 2 enums
     "TicketCategory",
     "AgentRole",
     "TicketPriority",
     "SupportTier",
+    # Round 2 models
     "Ticket",
     "HelpdeskAction",
     "HelpdeskEnvState",

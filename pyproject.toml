@@ -9,7 +9,7 @@ description = "Multi-agent IT Helpdesk environment with self-improving Knowledge
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [
-    { name = "EmailEnv Contributors", email = "support@example.com" }
+    { name = "HelpdeskEnv Contributors", email = "harishraghav256@gmail.com" }
 ]
 dependencies = [
     "pydantic>=2.6.0",
@@ -30,15 +30,14 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://huggingface.co/spaces/your-organization/emailenv"
+Homepage = "https://huggingface.co/spaces/Harishraghav-05/helpdeskenv"
 Repository = "https://github.com/HR5206/emailenv"
 
 
 [project.scripts]
 server = "server.app:main"
-emailenv-server = "server.app:main"
 
-[project.entry-points."emailenv.graders"]
-spam_classification = "graders:grade_spam"
-email_prioritization = "graders:grade_priority"
-reply_generation = "graders:grade_reply"
+[project.entry-points."helpdeskenv.graders"]
+ticket_triage = "graders:grade_triage"
+ticket_resolution = "graders:grade_reply"
+kb_contribution = "graders:grade_kb_contribution"

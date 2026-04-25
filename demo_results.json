@@ -1,0 +1,409 @@
+{
+  "episodes": [
+    {
+      "episode": 1,
+      "seed": 42,
+      "steps": 13,
+      "avg_reward": 0.7207692307692307,
+      "total_reward": 9.37,
+      "kb_start": 2,
+      "kb_end": 5,
+      "kb_added": 3,
+      "rewards": [
+        0.85,
+        0.69,
+        0.3,
+        0.46,
+        1.0,
+        1.0,
+        0.46,
+        1.0,
+        0.85,
+        0.3,
+        1.0,
+        0.46,
+        1.0
+      ]
+    },
+    {
+      "episode": 2,
+      "seed": 43,
+      "steps": 13,
+      "avg_reward": 0.7207692307692307,
+      "total_reward": 9.37,
+      "kb_start": 5,
+      "kb_end": 8,
+      "kb_added": 3,
+      "rewards": [
+        0.85,
+        0.69,
+        1.0,
+        0.46,
+        1.0,
+        1.0,
+        0.46,
+        1.0,
+        0.3,
+        0.46,
+        1.0,
+        0.85,
+        0.3
+      ]
+    },
+    {
+      "episode": 3,
+      "seed": 44,
+      "steps": 13,
+      "avg_reward": 0.7207692307692307,
+      "total_reward": 9.37,
+      "kb_start": 8,
+      "kb_end": 11,
+      "kb_added": 3,
+      "rewards": [
+        1.0,
+        0.46,
+        1.0,
+        0.85,
+        0.69,
+        0.3,
+        0.46,
+        1.0,
+        0.85,
+        0.3,
+        1.0,
+        0.46,
+        1.0
+      ]
+    },
+    {
+      "episode": 4,
+      "seed": 45,
+      "steps": 13,
+      "avg_reward": 0.7207692307692307,
+      "total_reward": 9.37,
+      "kb_start": 11,
+      "kb_end": 14,
+      "kb_added": 3,
+      "rewards": [
+        1.0,
+        0.46,
+        1.0,
+        1.0,
+        0.46,
+        1.0,
+        0.85,
+        0.3,
+        0.3,
+        0.46,
+        1.0,
+        0.85,
+        0.69
+      ]
+    },
+    {
+      "episode": 5,
+      "seed": 46,
+      "steps": 13,
+      "avg_reward": 0.7207692307692307,
+      "total_reward": 9.37,
+      "kb_start": 14,
+      "kb_end": 17,
+      "kb_added": 3,
+      "rewards": [
+        0.85,
+        0.69,
+        1.0,
+        0.46,
+        1.0,
+        0.3,
+        0.46,
+        1.0,
+        1.0,
+        0.46,
+        1.0,
+        0.85,
+        0.3
+      ]
+    }
+  ],
+  "kb_stats": {
+    "total_entries": 17,
+    "seeded_entries": 2,
+    "agent_authored": 15,
+    "total_retrievals": 72
+  },
+  "kb_entries": [
+    {
+      "entry_id": "kb_001",
+      "ticket_category": "password_reset",
+      "title": "Standard Password Reset Procedure",
+      "problem_description": "User locked out after failed login attempts.",
+      "solution": "1. Verify employee ID in HR system\n2. Open Admin Portal > User Management\n3. Search user > Click 'Reset Password'\n4. Generate temporary password and email to user\n5. Instruct user to change password on first login",
+      "keywords": [
+        "password",
+        "locked",
+        "account",
+        "reset",
+        "login"
+      ],
+      "created_by": "l3",
+      "times_used": 7
+    },
+    {
+      "entry_id": "kb_002",
+      "ticket_category": "software_install",
+      "title": "Standard Software Installation via SCCM",
+      "problem_description": "User requires software installed on corporate device.",
+      "solution": "1. Check license availability in license portal\n2. Verify user's VLAN/network segment allows the software\n3. Push install via SCCM > Applications > Deploy\n4. Verify installation completed via SCCM monitoring\n5. Notify user and confirm functionality",
+      "keywords": [
+        "install",
+        "software",
+        "SCCM",
+        "license",
+        "deploy"
+      ],
+      "created_by": "l3",
+      "times_used": 5
+    },
+    {
+      "entry_id": "agent_ticket_005_3",
+      "ticket_category": "novel_issue",
+      "title": "Solution for Bizarre: all printers on floor 2 printing gibberis",
+      "problem_description": "Something very strange is happening. Every printer on floor 2 started printing pages of random symbols and unicode characters about 20 minutes ago. No one sent these print jobs.\n\nWe've tried power cyc",
+      "solution": "Root cause: Bizarre: all printers on floor 2 printing gibberish characters. Resolution steps: 1. Diagnosed the issue. 2. Applied the fix. 3. Verified resolution. Workaround: Follow standard procedure. This solution was resolved and documented for future reference.",
+      "keywords": [
+        "bizarre:",
+        "all",
+        "printers",
+        "on",
+        "floor"
+      ],
+      "created_by": "l3",
+      "times_used": 19
+    },
+    {
+      "entry_id": "agent_ticket_003_4",
+      "ticket_category": "network_outage",
+      "title": "Solution for Office floor 3 has no internet - 40+ people affect",
+      "problem_description": "URGENT: The entire 3rd floor has lost internet connectivity as of 10 minutes ago. Wi-Fi and wired connections are both down. This is affecting 40+ employees including the sales team who have client de",
+      "solution": "Root cause: Office floor 3 has no internet - 40+ people affected. Resolution steps: 1. Diagnosed the issue. 2. Applied the fix. 3. Verified resolution. Workaround: Follow standard procedure. This solution was resolved and documented for future reference.",
+      "keywords": [
+        "office",
+        "floor",
+        "3",
+        "has",
+        "no"
+      ],
+      "created_by": "l3",
+      "times_used": 13
+    },
+    {
+      "entry_id": "agent_ticket_004_5",
+      "ticket_category": "data_recovery",
+      "title": "Solution for Accidentally deleted shared drive folder with Q4 r",
+      "problem_description": "I accidentally deleted the 'Q4-2025-Reports' folder from the shared finance drive. This contains 3 months of financial reports, board presentations, and audit documents.\n\nIs there any way to recover t",
+      "solution": "Root cause: Accidentally deleted shared drive folder with Q4 reports. Resolution steps: 1. Diagnosed the issue. 2. Applied the fix. 3. Verified resolution. Workaround: Follow standard procedure. This solution was resolved and documented for future reference.",
+      "keywords": [
+        "accidentally",
+        "deleted",
+        "shared",
+        "drive",
+        "folder"
+      ],
+      "created_by": "l3",
+      "times_used": 5
+    },
+    {
+      "entry_id": "agent_ticket_003_6",
+      "ticket_category": "network_outage",
+      "title": "Solution for Office floor 3 has no internet - 40+ people affect",
+      "problem_description": "URGENT: The entire 3rd floor has lost internet connectivity as of 10 minutes ago. Wi-Fi and wired connections are both down. This is affecting 40+ employees including the sales team who have client de",
+      "solution": "Root cause: Office floor 3 has no internet - 40+ people affected. Resolution steps: 1. Diagnosed the issue. 2. Applied the fix. 3. Verified resolution. Workaround: Follow standard procedure. This solution was resolved and documented for future reference.",
+      "keywords": [
+        "office",
+        "floor",
+        "3",
+        "has",
+        "no"
+      ],
+      "created_by": "l3",
+      "times_used": 4
+    },
+    {
+      "entry_id": "agent_ticket_004_7",
+      "ticket_category": "data_recovery",
+      "title": "Solution for Accidentally deleted shared drive folder with Q4 r",
+      "problem_description": "I accidentally deleted the 'Q4-2025-Reports' folder from the shared finance drive. This contains 3 months of financial reports, board presentations, and audit documents.\n\nIs there any way to recover t",
+      "solution": "Root cause: Accidentally deleted shared drive folder with Q4 reports. Resolution steps: 1. Diagnosed the issue. 2. Applied the fix. 3. Verified resolution. Workaround: Follow standard procedure. This solution was resolved and documented for future reference.",
+      "keywords": [
+        "accidentally",
+        "deleted",
+        "shared",
+        "drive",
+        "folder"
+      ],
+      "created_by": "l3",
+      "times_used": 3
+    },
+    {
+      "entry_id": "agent_ticket_005_8",
+      "ticket_category": "novel_issue",
+      "title": "Solution for Bizarre: all printers on floor 2 printing gibberis",
+      "problem_description": "Something very strange is happening. Every printer on floor 2 started printing pages of random symbols and unicode characters about 20 minutes ago. No one sent these print jobs.\n\nWe've tried power cyc",
+      "solution": "Root cause: Bizarre: all printers on floor 2 printing gibberish characters. Resolution steps: 1. Diagnosed the issue. 2. Applied the fix. 3. Verified resolution. Workaround: Follow standard procedure. This solution was resolved and documented for future reference.",
+      "keywords": [
+        "bizarre:",
+        "all",
+        "printers",
+        "on",
+        "floor"
+      ],
+      "created_by": "l3",
+      "times_used": 7
+    },
+    {
+      "entry_id": "agent_ticket_004_9",
+      "ticket_category": "data_recovery",
+      "title": "Solution for Accidentally deleted shared drive folder with Q4 r",
+      "problem_description": "I accidentally deleted the 'Q4-2025-Reports' folder from the shared finance drive. This contains 3 months of financial reports, board presentations, and audit documents.\n\nIs there any way to recover t",
+      "solution": "Root cause: Accidentally deleted shared drive folder with Q4 reports. Resolution steps: 1. Diagnosed the issue. 2. Applied the fix. 3. Verified resolution. Workaround: Follow standard procedure. This solution was resolved and documented for future reference.",
+      "keywords": [
+        "accidentally",
+        "deleted",
+        "shared",
+        "drive",
+        "folder"
+      ],
+      "created_by": "l3",
+      "times_used": 2
+    },
+    {
+      "entry_id": "agent_ticket_005_10",
+      "ticket_category": "novel_issue",
+      "title": "Solution for Bizarre: all printers on floor 2 printing gibberis",
+      "problem_description": "Something very strange is happening. Every printer on floor 2 started printing pages of random symbols and unicode characters about 20 minutes ago. No one sent these print jobs.\n\nWe've tried power cyc",
+      "solution": "Root cause: Bizarre: all printers on floor 2 printing gibberish characters. Resolution steps: 1. Diagnosed the issue. 2. Applied the fix. 3. Verified resolution. Workaround: Follow standard procedure. This solution was resolved and documented for future reference.",
+      "keywords": [
+        "bizarre:",
+        "all",
+        "printers",
+        "on",
+        "floor"
+      ],
+      "created_by": "l3",
+      "times_used": 5
+    },
+    {
+      "entry_id": "agent_ticket_003_11",
+      "ticket_category": "network_outage",
+      "title": "Solution for Office floor 3 has no internet - 40+ people affect",
+      "problem_description": "URGENT: The entire 3rd floor has lost internet connectivity as of 10 minutes ago. Wi-Fi and wired connections are both down. This is affecting 40+ employees including the sales team who have client de",
+      "solution": "Root cause: Office floor 3 has no internet - 40+ people affected. Resolution steps: 1. Diagnosed the issue. 2. Applied the fix. 3. Verified resolution. Workaround: Follow standard procedure. This solution was resolved and documented for future reference.",
+      "keywords": [
+        "office",
+        "floor",
+        "3",
+        "has",
+        "no"
+      ],
+      "created_by": "l3",
+      "times_used": 2
+    },
+    {
+      "entry_id": "agent_ticket_003_12",
+      "ticket_category": "network_outage",
+      "title": "Solution for Office floor 3 has no internet - 40+ people affect",
+      "problem_description": "URGENT: The entire 3rd floor has lost internet connectivity as of 10 minutes ago. Wi-Fi and wired connections are both down. This is affecting 40+ employees including the sales team who have client de",
+      "solution": "Root cause: Office floor 3 has no internet - 40+ people affected. Resolution steps: 1. Diagnosed the issue. 2. Applied the fix. 3. Verified resolution. Workaround: Follow standard procedure. This solution was resolved and documented for future reference.",
+      "keywords": [
+        "office",
+        "floor",
+        "3",
+        "has",
+        "no"
+      ],
+      "created_by": "l3",
+      "times_used": 0
+    },
+    {
+      "entry_id": "agent_ticket_004_13",
+      "ticket_category": "data_recovery",
+      "title": "Solution for Accidentally deleted shared drive folder with Q4 r",
+      "problem_description": "I accidentally deleted the 'Q4-2025-Reports' folder from the shared finance drive. This contains 3 months of financial reports, board presentations, and audit documents.\n\nIs there any way to recover t",
+      "solution": "Root cause: Accidentally deleted shared drive folder with Q4 reports. Resolution steps: 1. Diagnosed the issue. 2. Applied the fix. 3. Verified resolution. Workaround: Follow standard procedure. This solution was resolved and documented for future reference.",
+      "keywords": [
+        "accidentally",
+        "deleted",
+        "shared",
+        "drive",
+        "folder"
+      ],
+      "created_by": "l3",
+      "times_used": 0
+    },
+    {
+      "entry_id": "agent_ticket_005_14",
+      "ticket_category": "novel_issue",
+      "title": "Solution for Bizarre: all printers on floor 2 printing gibberis",
+      "problem_description": "Something very strange is happening. Every printer on floor 2 started printing pages of random symbols and unicode characters about 20 minutes ago. No one sent these print jobs.\n\nWe've tried power cyc",
+      "solution": "Root cause: Bizarre: all printers on floor 2 printing gibberish characters. Resolution steps: 1. Diagnosed the issue. 2. Applied the fix. 3. Verified resolution. Workaround: Follow standard procedure. This solution was resolved and documented for future reference.",
+      "keywords": [
+        "bizarre:",
+        "all",
+        "printers",
+        "on",
+        "floor"
+      ],
+      "created_by": "l3",
+      "times_used": 0
+    },
+    {
+      "entry_id": "agent_ticket_004_15",
+      "ticket_category": "data_recovery",
+      "title": "Solution for Accidentally deleted shared drive folder with Q4 r",
+      "problem_description": "I accidentally deleted the 'Q4-2025-Reports' folder from the shared finance drive. This contains 3 months of financial reports, board presentations, and audit documents.\n\nIs there any way to recover t",
+      "solution": "Root cause: Accidentally deleted shared drive folder with Q4 reports. Resolution steps: 1. Diagnosed the issue. 2. Applied the fix. 3. Verified resolution. Workaround: Follow standard procedure. This solution was resolved and documented for future reference.",
+      "keywords": [
+        "accidentally",
+        "deleted",
+        "shared",
+        "drive",
+        "folder"
+      ],
+      "created_by": "l3",
+      "times_used": 0
+    },
+    {
+      "entry_id": "agent_ticket_005_16",
+      "ticket_category": "novel_issue",
+      "title": "Solution for Bizarre: all printers on floor 2 printing gibberis",
+      "problem_description": "Something very strange is happening. Every printer on floor 2 started printing pages of random symbols and unicode characters about 20 minutes ago. No one sent these print jobs.\n\nWe've tried power cyc",
+      "solution": "Root cause: Bizarre: all printers on floor 2 printing gibberish characters. Resolution steps: 1. Diagnosed the issue. 2. Applied the fix. 3. Verified resolution. Workaround: Follow standard procedure. This solution was resolved and documented for future reference.",
+      "keywords": [
+        "bizarre:",
+        "all",
+        "printers",
+        "on",
+        "floor"
+      ],
+      "created_by": "l3",
+      "times_used": 0
+    },
+    {
+      "entry_id": "agent_ticket_003_17",
+      "ticket_category": "network_outage",
+      "title": "Solution for Office floor 3 has no internet - 40+ people affect",
+      "problem_description": "URGENT: The entire 3rd floor has lost internet connectivity as of 10 minutes ago. Wi-Fi and wired connections are both down. This is affecting 40+ employees including the sales team who have client de",
+      "solution": "Root cause: Office floor 3 has no internet - 40+ people affected. Resolution steps: 1. Diagnosed the issue. 2. Applied the fix. 3. Verified resolution. Workaround: Follow standard procedure. This solution was resolved and documented for future reference.",
+      "keywords": [
+        "office",
+        "floor",
+        "3",
+        "has",
+        "no"
+      ],
+      "created_by": "l3",
+      "times_used": 0
+    }
+  ]
+}

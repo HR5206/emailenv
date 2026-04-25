@@ -1,0 +1,25 @@
+{
+  "steps": 13,
+  "avg_reward": 0.7207692307692307,
+  "rewards": [
+    0.85,
+    0.69,
+    0.3,
+    0.46,
+    1.0,
+    1.0,
+    0.46,
+    1.0,
+    0.85,
+    0.3,
+    1.0,
+    0.46,
+    1.0
+  ],
+  "kb_stats": {
+    "total_entries": 5,
+    "seeded_entries": 2,
+    "agent_authored": 3,
+    "total_retrievals": 8
+  }
+}

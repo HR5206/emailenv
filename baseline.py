@@ -1,256 +1,132 @@
-import os
+"""HelpdeskEnv Baseline — Heuristic evaluation across ticket scenarios (Part 18).
+
+Runs all 5 ticket scenarios with heuristic agents and reports scores + KB growth.
+"""
+
 import json
-from typing import Optional
-from dotenv import load_dotenv
-from tasks import get_tasks_by_type
-from graders import grade_spam, grade_priority, grade_reply
-from models import AgentAction
+from helpdeskenv_class import HelpdeskEnv
+from models import HelpdeskAction, AgentRole
+from inference import heuristic_triage, heuristic_l1, heuristic_l3_kb
 
-# Load environment variables from .env
-load_dotenv()
 
-API_BASE_URL: str = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
-MODEL_NAME: str = os.getenv("MODEL_NAME", "gpt-5-nano")
-API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY") or os.getenv("HF_TOKEN")
+def run_baseline():
+    """Run baseline evaluation: triage + resolve all tickets with heuristics."""
+    env = HelpdeskEnv()
+    reset_result = env.reset(seed=42, num_tickets=5)
 
-try:
-    from openai import OpenAI
-    HAS_OPENAI = True
-except ImportError:
-    HAS_OPENAI = False
-
-def get_client() -> Optional[object]:
-    if not HAS_OPENAI:
-        print("OpenAI client not available - using simulated baseline")
-        return None
-    
-    if not API_KEY:
-        print("No API key found - using simulated baseline")
-        return None
-
-    return OpenAI(api_key=API_KEY, base_url=API_BASE_URL, max_retries=0)
-
-def simulate_spam_answer(task):
-    # Heuristic over subject + body text
-    text_lower = f"{task.subject} {task.body}".lower()
-
-    spam_keywords = ["congratulations", "won", "free", "claim", "urgent", "verify", "account", "compromised", "$5000", "easy money"]
-    not_spam_keywords = ["standup", "team", "invoice", "github", "pull request"]
-    
-    spam_count = sum(1 for kw in spam_keywords if kw in text_lower)
-    not_spam_count = sum(1 for kw in not_spam_keywords if kw in text_lower)
-    
-    if spam_count > not_spam_count:
-        return "spam"
-    else:
-        return "not_spam"
-
-def simulate_priority_answer(task):
-    # Heuristic over subject + body text
-    content_lower = f"{task.subject} {task.body}".lower()
-
-    high_keywords = ["production", "critical", "down", "urgent", "immediate", "outage", "security", "vulnerability", "$200k", "deal"]
-    low_keywords = ["newsletter", "lunch", "menu", "social", "ping pong"]
-    medium_keywords = ["review", "eod", "blocking", "qa"]
-    
-    high_count = sum(1 for kw in high_keywords if kw in content_lower)
-    low_count = sum(1 for kw in low_keywords if kw in content_lower)
-    medium_count = sum(1 for kw in medium_keywords if kw in content_lower)
-    
-    if high_count >= low_count and high_count >= medium_count:
-        return "high"
-    elif low_count >= medium_count:
-        return "low"
-    else:
-        return "medium"
-
-def simulate_reply_answer(task):
-    return ("Thank you for reaching out. I understand your concern and sincerely apologize for "
-            "the inconvenience. We've reviewed your issue and are committed to resolving it promptly. "
-            "Our team is actively working on this matter and will provide you with an update within "
-            "the next 24 hours. We truly appreciate your patience and feedback.")
-
-def run_spam_baseline(client: Optional[object]):
-    print("\nSPAM DETECTION (Easy)")
     print("=" * 60)
-    
-    spam_tasks = get_tasks_by_type("spam")[:3]
-    scores = []
-    
-    for task in spam_tasks:
-        if client:
-            try:
-                snippet = f"{task.subject} {task.body}"[:200]
-                prompt = (
-                    "Classify as SPAM or NOT_SPAM: "
-                    f"{snippet}\nRespond with only 'spam' or 'not_spam' (lowercase)."
-                )
+    print("  HelpdeskEnv Baseline Evaluation")
+    print("=" * 60)
+    print(f"  Tickets: {reset_result.total_tickets}")
+    print(f"  KB size at start: {reset_result.kb_size}")
+    print()
 
-                response = client.chat.completions.create(
-                    model=MODEL_NAME,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.0,
-                    max_tokens=10,
-                )
-                answer = response.choices[0].message.content.strip().lower()
-            except Exception:
-                answer = simulate_spam_answer(task)
+    rewards = []
+    steps = 0
+
+    while not env.state().is_done:
+        state = env.state()
+        ticket = state.current_ticket
+        if ticket is None:
+            break
+
+        agent = state.current_agent
+
+        if agent == AgentRole.TRIAGE:
+            triage_data = heuristic_triage(ticket)
+            action = HelpdeskAction(
+                ticket_id=ticket.ticket_id,
+                agent_role=AgentRole.TRIAGE,
+                action_type="classify_category",
+                action_value=json.dumps(triage_data),
+            )
+            result = env.step(action)
+            steps += 1
+            rewards.append(result.reward)
+            print(f"  [{steps}] TRIAGE {ticket.ticket_id}: reward={result.reward:.2f}")
+            continue
+
+        # KB search
+        kb_results = env.kb().search(ticket.subject)
+
+        if kb_results and agent in (AgentRole.L1, AgentRole.L2):
+            action = HelpdeskAction(
+                ticket_id=ticket.ticket_id,
+                agent_role=agent,
+                action_type="apply_solution",
+                action_value=kb_results[0].solution,
+            )
         else:
-            answer = simulate_spam_answer(task)
+            # L3 writes KB first
+            if agent == AgentRole.L3 and ticket.requires_kb_article:
+                kb_data = heuristic_l3_kb(ticket)
+                kb_action = HelpdeskAction(
+                    ticket_id=ticket.ticket_id,
+                    agent_role=AgentRole.L3,
+                    action_type="write_kb_entry",
+                    action_value=kb_data["action_value"],
+                )
+                kb_result = env.step(kb_action)
+                steps += 1
+                rewards.append(kb_result.reward)
+                print(f"  [{steps}] L3 KB_WRITE {ticket.ticket_id}: reward={kb_result.reward:.2f}")
+                if env.state().is_done:
+                    break
 
-        action = AgentAction(task_id=task.task_id, action_value=answer)
-        result = grade_spam(task, action)
-        scores.append(result.reward)
-
-        print(f"Task {task.task_id}: {answer} \\u2192 Reward: {result.reward:.2f}")
-    
-    avg_score = sum(scores) / len(scores)
-    print(f"\nAverage Spam Score: {avg_score:.4f}")
-    return avg_score
-
-def run_priority_baseline(client: Optional[object]):
-    print("\nEMAIL PRIORITIZATION (Medium)")
-    print("=" * 60)
-    
-    priority_tasks = get_tasks_by_type("priority")[:3]
-    scores = []
-    
-    for task in priority_tasks:
-        if client:
-            try:
-                snippet = f"{task.subject} {task.body}"[:200]
-                prompt = (
-                    "Priority: high/medium/low? "
-                    f"{snippet}\nRespond with only 'high', 'medium', or 'low' (lowercase)."
+            # Resolve
+            if agent == AgentRole.L1:
+                action = HelpdeskAction(
+                    ticket_id=ticket.ticket_id,
+                    agent_role=AgentRole.L1,
+                    action_type="apply_solution",
+                    action_value=ticket.ground_truth_resolution or "Applied standard fix.",
+                )
+            elif agent == AgentRole.L2:
+                action = HelpdeskAction(
+                    ticket_id=ticket.ticket_id,
+                    agent_role=AgentRole.L2,
+                    action_type="apply_fix",
+                    action_value=ticket.ground_truth_resolution or "Applied technical fix.",
+                )
+            else:
+                action = HelpdeskAction(
+                    ticket_id=ticket.ticket_id,
+                    agent_role=AgentRole.L3,
+                    action_type="apply_complex_fix",
+                    action_value=ticket.ground_truth_resolution or "Applied expert fix.",
                 )
 
-                response = client.chat.completions.create(
-                    model=MODEL_NAME,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.0,
-                    max_tokens=10,
-                )
-                answer = response.choices[0].message.content.strip().lower()
-            except Exception:
-                answer = simulate_priority_answer(task)
-        else:
-            answer = simulate_priority_answer(task)
+        result = env.step(action)
+        steps += 1
+        rewards.append(result.reward)
+        print(f"  [{steps}] {agent.value.upper()} RESOLVE {ticket.ticket_id}: reward={result.reward:.2f}")
 
-        action = AgentAction(task_id=task.task_id, action_value=answer)
-        result = grade_priority(task, action)
-        scores.append(result.reward)
+    # Summary
+    avg = sum(rewards) / len(rewards) if rewards else 0.0
+    kb_stats = env.kb().stats()
 
-        print(f"Task {task.task_id}: {answer} \\u2192 Reward: {result.reward:.2f}")
-    
-    avg_score = sum(scores) / len(scores)
-    print(f"\nAverage Priority Score: {avg_score:.4f}")
-    return avg_score
-
-def run_reply_baseline(client: Optional[object]):
-    print("\nREPLY GENERATION (Hard)")
+    print()
     print("=" * 60)
-    
-    reply_tasks = get_tasks_by_type("reply")[:2]
-    scores = []
-    
-    for task in reply_tasks:
-        if client:
-            try:
-                snippet = f"{task.subject} {task.body}"[:200]
-                prompt = f"Draft a professional reply to: {snippet}"
-
-                response = client.chat.completions.create(
-                    model=MODEL_NAME,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.0,
-                    max_tokens=150,
-                )
-                answer = response.choices[0].message.content.strip()
-            except Exception:
-                answer = simulate_reply_answer(task)
-        else:
-            answer = simulate_reply_answer(task)
-
-        action = AgentAction(task_id=task.task_id, action_value=answer)
-        result = grade_reply(task, action)
-        scores.append(result.reward)
-
-        print(f"Task {task.task_id}: {result.reward:.2f}")
-        print(f"  Reply: {answer[:60]}...")
-    
-    avg_score = sum(scores) / len(scores)
-    print(f"\nAverage Reply Score: {avg_score:.4f}")
-    return avg_score
-
-def main():
-    print("\n" + "=" * 60)
-    print("EmailEnv Baseline Evaluation")
+    print("  BASELINE RESULTS")
     print("=" * 60)
-    print(f"API Base: {API_BASE_URL}")
-    print(f"Model (for LLM baseline): {MODEL_NAME}")
+    print(f"  Total steps: {steps}")
+    print(f"  Avg reward: {avg:.4f}")
+    print(f"  KB entries: {kb_stats['total_entries']}")
+    print(f"  KB retrievals: {kb_stats['total_retrievals']}")
+    print(f"  Escalations: {env.state().escalation_count}")
     print("=" * 60)
 
-    # 1) Heuristic baseline (no API calls)
-    print("\n" + "-" * 60)
-    print("HEURISTIC BASELINE (no model)")
-    print("-" * 60)
-    heuristic_spam = run_spam_baseline(client=None)
-    heuristic_priority = run_priority_baseline(client=None)
-    heuristic_reply = run_reply_baseline(client=None)
-    heuristic_overall = (heuristic_spam + heuristic_priority + heuristic_reply) / 3
-
-    # 2) LLM baseline for MODEL_NAME, if OpenAI client is available
-    model_spam = model_priority = model_reply = model_overall = None
-    client = get_client()
-    if client is not None:
-        print("\n" + "-" * 60)
-        print(f"LLM BASELINE ({MODEL_NAME})")
-        print("-" * 60)
-        model_spam = run_spam_baseline(client)
-        model_priority = run_priority_baseline(client)
-        model_reply = run_reply_baseline(client)
-        model_overall = (model_spam + model_priority + model_reply) / 3
-    else:
-        print("\nNo API key detected or OpenAI client unavailable – skipping LLM baseline.")
-
-    # Summary table
-    print("\n" + "=" * 60)
-    print("BASELINE RESULTS")
-    print("=" * 60)
-    print(f"Heuristic Spam Detection:   {heuristic_spam:.4f}")
-    print(f"Heuristic Prioritization:   {heuristic_priority:.4f}")
-    print(f"Heuristic Reply Generation: {heuristic_reply:.4f}")
-    print(f"Heuristic Overall:          {heuristic_overall:.4f}")
-    if model_overall is not None:
-        print("-" * 60)
-        print(f"{MODEL_NAME} Spam Detection:   {model_spam:.4f}")
-        print(f"{MODEL_NAME} Prioritization:   {model_priority:.4f}")
-        print(f"{MODEL_NAME} Reply Generation: {model_reply:.4f}")
-        print(f"{MODEL_NAME} Overall:          {model_overall:.4f}")
-    print("=" * 60)
-
-    # Persist results
-    payload = {
-        "model": MODEL_NAME,
-        "heuristic": {
-            "spam_detection": float(heuristic_spam),
-            "prioritization": float(heuristic_priority),
-            "reply_generation": float(heuristic_reply),
-            "overall": float(heuristic_overall),
-        },
+    # Save
+    results = {
+        "steps": steps,
+        "avg_reward": avg,
+        "rewards": rewards,
+        "kb_stats": kb_stats,
     }
-    if model_overall is not None:
-        payload["llm"] = {
-            "spam_detection": float(model_spam),
-            "prioritization": float(model_priority),
-            "reply_generation": float(model_reply),
-            "overall": float(model_overall),
-        }
-
     with open("baseline_results.json", "w") as f:
-        json.dump(payload, f, indent=2)
-
+        json.dump(results, f, indent=2)
     print("Results saved to baseline_results.json")
 
+
 if __name__ == "__main__":
-    main()
+    run_baseline()

@@ -1,25 +1,8 @@
-"""Client utilities for interacting with the EmailEnv environment.
+"""Client utilities for interacting with the HelpdeskEnv environment.
 
-This lightweight module is provided to match the expected OpenEnv
-environment structure (which looks for a `client.py` alongside
-`openenv.yaml`).  For most usages within this project, you can import
-and use the underlying primitives directly from the `emailenv` package.
-
-Example:
-    from emailenv import EmailEnv, Action
-
-    env = EmailEnv()
-    obs = env.reset(task="spam_classification")
-    ...
+For most use cases you do not need a separate HTTP client --
+start the FastAPI server and use /reset, /step, /state directly,
+or use the underlying primitives from the helpdeskenv package.
 """
 
-from emailenv import EmailEnv, Email, Observation, Action, State, Reward
-
-__all__ = [
-    "EmailEnv",
-    "Email",
-    "Observation",
-    "Action",
-    "State",
-    "Reward",
-]
+__all__ = ["HelpdeskEnv"]
