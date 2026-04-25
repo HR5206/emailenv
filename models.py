@@ -94,6 +94,37 @@ class TaskType(str, Enum):
     REPLY = "reply"
 
 
+class TicketCategory(str, Enum):
+    """Categories for helpdesk tickets."""
+    PASSWORD_RESET = "password_reset"
+    SOFTWARE_INSTALL = "software_install"
+    NETWORK_OUTAGE = "network_outage"
+    DATA_RECOVERY = "data_recovery"
+    NOVEL_ISSUE = "novel_issue"
+
+
+class AgentRole(str, Enum):
+    """The four agent roles in the helpdesk."""
+    TRIAGE = "triage"
+    L1 = "l1"
+    L2 = "l2"
+    L3 = "l3"
+
+
+class TicketPriority(str, Enum):
+    """Priority levels for tickets."""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class SupportTier(str, Enum):
+    """Which support tier should handle this ticket."""
+    L1 = "l1"
+    L2 = "l2"
+    L3 = "l3"
+
 class EmailTask(BaseModel):
     """
     Represents one email scenario presented to the agent.
@@ -176,6 +207,47 @@ class EnvState(BaseModel):
         description="List of all past StepResults in this episode"
     )
 
+class Ticket(BaseModel):
+    """A helpdesk ticket — the core observation unit in Round 2."""
+    ticket_id: str = Field(..., description="Unique ticket identifier")
+    category: TicketCategory = Field(..., description="Ticket category")
+    subject: str = Field(..., description="Ticket subject line")
+    sender: str = Field(..., description="Customer email address")
+    body: str = Field(..., description="Full ticket description")
+    context: Optional[str] = Field(None, description="Role-specific instructions")
+    ground_truth_priority: Optional[TicketPriority] = Field(None)
+    ground_truth_tier: Optional[SupportTier] = Field(None)
+    ground_truth_resolution: Optional[str] = Field(None)
+    sla_steps: int = Field(default=5, description="Max steps before SLA breach")
+    requires_kb_article: bool = Field(default=False, description="Should agent write a KB entry?")
+
+class HelpdeskAction(BaseModel):
+    """Action submitted by any agent in the helpdesk."""
+    ticket_id: str = Field(..., description="Must match the current ticket")
+    agent_role: AgentRole = Field(..., description="Who is performing this action")
+    action_type: str = Field(
+        ...,
+        description=(
+            "One of: classify_category, set_priority, assign_tier, "
+            "search_kb, apply_solution, respond_to_customer, escalate, "
+            "request_info, diagnose, deep_diagnose, apply_fix, "
+            "apply_complex_fix, write_kb_entry"
+        )
+    )
+    action_value: str = Field(..., description="The agent's answer or payload")
+
+class HelpdeskEnvState(BaseModel):
+    """Extended state for the multi-agent helpdesk."""
+    current_ticket: Optional[Ticket] = None
+    current_agent: Optional[AgentRole] = None
+    ticket_number: int = 0
+    total_tickets: int = 0
+    total_reward: float = 0.0
+    steps_on_current_ticket: int = 0
+    is_done: bool = False
+    history: list[StepResult] = Field(default_factory=list)
+    kb_entries_added: int = 0
+    escalation_count: int = 0
 
 class ResetResponse(BaseModel):
     """
@@ -219,4 +291,12 @@ __all__ = [
     "EnvState",
     "ResetResponse",
     "ErrorResponse",
+
+    "TicketCategory",
+    "AgentRole",
+    "TicketPriority",
+    "SupportTier",
+    "Ticket",
+    "HelpdeskAction",
+    "HelpdeskEnvState",
 ]

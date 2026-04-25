@@ -1,14 +1,14 @@
 spec_version: "1.0"
-name: EmailEnv
-id: emailenv
+name: HelpdeskEnv
+id: helpdeskenv
 type: space
-version: "0.1.0"
-description: "An OpenEnv-compliant environment for professional email triage and customer support, including spam detection, prioritization, and reply generation."
+version: "2.0.0"
+description: "A multi-agent OpenEnv environment simulating an IT helpdesk with triage, tiered support, SLA tracking, and self-improving Knowledge Base."
 license: Apache-2.0
-homepage: "https://huggingface.co/spaces/Harishraghav-05/emailenv"
+homepage: "https://huggingface.co/spaces/Harishraghav-05/helpdeskenv"
 repository: "https://github.com/HR5206/emailenv"
 maintainers:
-  - name: "EmailEnv Maintainers"
+  - name: "HelpdeskEnv Maintainers"
     email: "harishraghav256@gmail.com"
 runtime:
   type: docker
@@ -16,33 +16,33 @@ runtime:
   port: 7860
 tags:
   - openenv
-  - email
-  - spam-detection
-  - customer-support
-  - prioritization
-  - reply-generation
+  - multi-agent
+  - helpdesk
+  - self-improving
+  - knowledge-base
+  - IT-support
 tasks:
-  - id: spam_classification
-    name: Spam Classification
-    description: "Classify an incoming email as spam or not_spam."
+  - id: ticket_triage
+    name: Ticket Triage
+    description: "Classify incoming ticket: category, priority, and support tier."
     difficulty: easy
     grader:
       type: python
       path: graders.py
-      function: grade_spam
-  - id: email_prioritization
-    name: Email Prioritization
-    description: "Assign a priority level (high, medium, low) to an incoming email."
+      function: grade_triage
+  - id: ticket_resolution
+    name: Ticket Resolution
+    description: "Resolve IT support tickets through diagnosis and solution application."
     difficulty: medium
     grader:
       type: python
       path: graders.py
-      function: grade_priority
-  - id: reply_generation
-    name: Reply Generation
-    description: "Draft a polite, relevant, and appropriately-lengthed reply to an email."
+      function: grade_reply
+  - id: kb_contribution
+    name: Knowledge Base Contribution
+    description: "Document novel solutions for future retrieval — self-improvement mechanism."
     difficulty: hard
     grader:
       type: python
       path: graders.py
-      function: grade_reply
+      function: grade_kb_contribution

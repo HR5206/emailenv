@@ -379,3 +379,147 @@ def get_tasks_by_type(task_type: str) -> list[EmailTask]:
     if key == "reply":
         return REPLY_SCENARIOS
     raise ValueError(f"Unknown task_type: {task_type}")
+
+from models import Ticket, TicketCategory, TicketPriority, SupportTier
+# ============================================================================
+# Round 2: IT Helpdesk Ticket Scenarios
+# ============================================================================
+TICKET_SCENARIOS = [
+    # Easy — L1 handles directly
+    Ticket(
+        ticket_id="ticket_001",
+        category=TicketCategory.PASSWORD_RESET,
+        subject="Can't log into my account",
+        sender="john.doe@company.com",
+        body=(
+            "Hi IT Support,\n\n"
+            "I've been locked out of my account after too many failed "
+            "password attempts. My employee ID is EMP-4521. "
+            "I need access back ASAP for a client meeting at 3pm.\n\n"
+            "Thanks,\nJohn"
+        ),
+        context=(
+            "Standard password reset procedure: verify employee ID, "
+            "reset via admin portal, send temporary password."
+        ),
+        ground_truth_priority=TicketPriority.MEDIUM,
+        ground_truth_tier=SupportTier.L1,
+        ground_truth_resolution="Reset password via admin portal and send temp credentials.",
+        sla_steps=3,
+        requires_kb_article=False,
+    ),
+    # Medium — L1 attempts, may escalate to L2
+    Ticket(
+        ticket_id="ticket_002",
+        category=TicketCategory.SOFTWARE_INSTALL,
+        subject="Need Adobe Creative Suite installed on new laptop",
+        sender="designer@company.com",
+        body=(
+            "Hello,\n\n"
+            "I just received my new work laptop and need Adobe Creative Suite "
+            "installed. I have the license key but the corp policy requires "
+            "IT to install it. My machine is on the design VLAN.\n\n"
+            "This is blocking my project work.\n\nThanks"
+        ),
+        context=(
+            "Software installs require checking license allocation and "
+            "VLAN access policy. Design VLAN has special firewall rules."
+        ),
+        ground_truth_priority=TicketPriority.MEDIUM,
+        ground_truth_tier=SupportTier.L2,
+        ground_truth_resolution="Verify license, check VLAN policy, remote-install via SCCM.",
+        sla_steps=4,
+        requires_kb_article=False,
+    ),
+    # Hard — Requires L2 diagnosis then L3 resolution
+    Ticket(
+        ticket_id="ticket_003",
+        category=TicketCategory.NETWORK_OUTAGE,
+        subject="Office floor 3 has no internet - 40+ people affected",
+        sender="floor3.manager@company.com",
+        body=(
+            "URGENT: The entire 3rd floor has lost internet connectivity "
+            "as of 10 minutes ago. Wi-Fi and wired connections are both "
+            "down. This is affecting 40+ employees including the sales "
+            "team who have client demos today.\n\n"
+            "The switch in server room 3B has blinking amber lights."
+        ),
+        context=(
+            "Network outages affecting entire floors are typically caused by "
+            "switch failures or DHCP pool exhaustion. Check switch 3B status, "
+            "verify DHCP lease pool, and check uplink to core router."
+        ),
+        ground_truth_priority=TicketPriority.CRITICAL,
+        ground_truth_tier=SupportTier.L3,
+        ground_truth_resolution=(
+            "Switch 3B failed — replace with standby switch. "
+            "DHCP pool was at 98% — expanded from /24 to /23."
+        ),
+        sla_steps=5,
+        requires_kb_article=True,
+    ),
+    # Expert — Multi-step recovery
+    Ticket(
+        ticket_id="ticket_004",
+        category=TicketCategory.DATA_RECOVERY,
+        subject="Accidentally deleted shared drive folder with Q4 reports",
+        sender="finance.lead@company.com",
+        body=(
+            "I accidentally deleted the 'Q4-2025-Reports' folder from the "
+            "shared finance drive. This contains 3 months of financial reports, "
+            "board presentations, and audit documents.\n\n"
+            "Is there any way to recover this? The folder was deleted about "
+            "30 minutes ago. Please treat this as extremely urgent."
+        ),
+        context=(
+            "Shared drives have 30-day recycle bin retention. "
+            "VSS snapshots are taken every 6 hours. "
+            "Full backups run nightly to off-site storage."
+        ),
+        ground_truth_priority=TicketPriority.CRITICAL,
+        ground_truth_tier=SupportTier.L3,
+        ground_truth_resolution=(
+            "Restored from recycle bin (within 30-day window). "
+            "Verified file integrity against last VSS snapshot."
+        ),
+        sla_steps=4,
+        requires_kb_article=True,
+    ),
+    # Adversarial — No existing KB entry
+    Ticket(
+        ticket_id="ticket_005",
+        category=TicketCategory.NOVEL_ISSUE,
+        subject="Bizarre: all printers on floor 2 printing gibberish characters",
+        sender="office.admin@company.com",
+        body=(
+            "Something very strange is happening. Every printer on floor 2 "
+            "started printing pages of random symbols and unicode characters "
+            "about 20 minutes ago. No one sent these print jobs.\n\n"
+            "We've tried power cycling two printers but they start again "
+            "after reboot. The print queue shows jobs from 'SYSTEM' user."
+        ),
+        context=(
+            "This is a novel issue with no existing KB article. "
+            "The agent must reason through diagnosis and document the solution."
+        ),
+        ground_truth_priority=TicketPriority.HIGH,
+        ground_truth_tier=SupportTier.L3,
+        ground_truth_resolution=(
+            "Rogue print spooler service on print server was compromised. "
+            "Cleared spooler queue, restarted service, applied security patch."
+        ),
+        sla_steps=6,
+        requires_kb_article=True,
+    ),
+]
+def get_ticket_scenario(index: int) -> Ticket:
+    """Get a specific ticket scenario by index."""
+    return TICKET_SCENARIOS[index % len(TICKET_SCENARIOS)]
+def get_random_ticket_scenario(seed: int = None) -> Ticket:
+    """Get a random ticket scenario, optionally seeded."""
+    if seed is not None:
+        random.seed(seed)
+    return random.choice(TICKET_SCENARIOS)
+def get_all_ticket_scenarios() -> list[Ticket]:
+    """Return all ticket scenarios."""
+    return TICKET_SCENARIOS

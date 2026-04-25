@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 from openai import OpenAI
 
 from emailenv_class import EmailEnv
-from models import Action, TaskType, AgentAction, ErrorResponse
+from models import Action, TaskType, AgentAction, ErrorResponse, AgentRole
 
 API_BASE_URL: str = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
 MODEL_NAME: str = os.getenv("MODEL_NAME", "gpt-4o-mini")
@@ -30,6 +30,37 @@ TASK_SEQUENCE = [
     "email_prioritization",
     "reply_generation",
 ]
+
+
+
+# ---------------------------------------------------------------------------
+# Round 2: Agent dispatch prompts
+# ---------------------------------------------------------------------------
+
+AGENT_PROMPTS = {
+    AgentRole.TRIAGE: (
+        "You are a Triage agent at an IT helpdesk. "
+        "Read the ticket and output: category, priority, and which tier should handle it. "
+        'Respond with JSON: {"category":"...", "priority":"...", "tier":"..."}'
+    ),
+    AgentRole.L1: (
+        "You are a Level 1 IT Support agent. You handle simple issues. "
+        "You have access to a Knowledge Base. "
+        "Available actions: search_kb, apply_solution, respond_to_customer, escalate. "
+        'Respond with JSON: {"action_type":"...", "action_value":"..."}'
+    ),
+    AgentRole.L2: (
+        "You are a Level 2 IT Support agent. You handle medium-complexity issues. "
+        "Available actions: diagnose, request_info, apply_fix, escalate, respond_to_customer. "
+        'Respond with JSON: {"action_type":"...", "action_value":"..."}'
+    ),
+    AgentRole.L3: (
+        "You are a Level 3 IT Support agent (senior engineer). "
+        "You handle complex issues and document new solutions in the Knowledge Base. "
+        "Available actions: deep_diagnose, apply_complex_fix, write_kb_entry, respond_to_customer. "
+        'Respond with JSON: {"action_type":"...", "action_value":"..."}'
+    ),
+}
 
 
 # ---------------------------------------------------------------------------

@@ -57,9 +57,10 @@ def grade_spam(task: EmailTask, action: AgentAction) -> StepResult:
 # Task 2: Email Prioritization Grader
 # ============================================================================
 
-VALID_PRIORITIES = {"high", "medium", "low"}
+VALID_PRIORITIES = {"critical", "high", "medium", "low"}
 
 PRIORITY_SCALE = {
+    "critical": 3,
     "high": 2,
     "medium": 1, 
     "low": 0
@@ -269,4 +270,91 @@ def grade_reply(task: EmailTask, action: AgentAction) -> StepResult:
         done = False,
         feedback = feedback,
         correct_answer = task.ground_truth
+    )
+
+
+# ============================================================================
+# Round 2 — New Graders
+# ============================================================================
+
+def grade_triage(ticket, action):
+    """
+    Grades the Triage agent's classification.
+
+    Scoring:
+    - category_correct (0 or 1) x 0.4
+    - priority_correct (0, 0.5, or 1) x 0.3   — reuses PRIORITY_SCALE logic
+    - tier_correct (0 or 1) x 0.3
+    """
+    scores = {}
+
+    # Category match
+    if action.action_value == ticket.category.value:
+        scores["category"] = 1.0
+    else:
+        scores["category"] = 0.0
+
+    # Priority match — reuse existing scale logic
+    submitted_priority = action.action_value
+    correct_priority = ticket.ground_truth_priority.value
+
+    # Tier match
+    # Similar binary check
+
+    reward = (scores.get("category", 0) * 0.4 +
+              scores.get("priority", 0) * 0.3 +
+              scores.get("tier", 0) * 0.3)
+
+    return StepResult(
+        task_id=ticket.ticket_id,
+        reward=round(reward, 2),
+        done=False,
+        feedback=f"Triage scores: {scores}",
+        correct_answer=f"category={ticket.category.value}, "
+                       f"priority={ticket.ground_truth_priority.value}, "
+                       f"tier={ticket.ground_truth_tier.value}"
+    )
+
+
+def grade_efficiency(steps_taken: int, sla_steps: int, escalation_count: int) -> float:
+    """
+    Grades how efficiently the ticket was resolved.
+
+    - 1.0 if resolved within SLA with minimal escalations
+    - Penalty for each step over SLA
+    - Penalty for unnecessary escalations
+    """
+    if steps_taken <= sla_steps:
+        sla_score = 1.0
+    else:
+        overage = steps_taken - sla_steps
+        sla_score = max(0.0, 1.0 - (overage * 0.25))
+
+    esc_score = max(0.0, 1.0 - (escalation_count * 0.2))
+
+    return round((sla_score * 0.6 + esc_score * 0.4), 2)
+
+
+def grade_kb_contribution(kb_entry_text: str, ticket) -> float:
+    """
+    Grades a Knowledge Base article written by the L3 agent.
+    Reuses _score_relevance and _score_length from the reply grader.
+    """
+    if not kb_entry_text or not kb_entry_text.strip():
+        return 0.0
+
+    relevance_score, _ = _score_relevance(kb_entry_text, ticket)
+    length_score, _ = _score_length(kb_entry_text)
+
+    solution_keywords = ["resolved", "fixed", "solution", "steps", "root cause",
+                         "workaround", "procedure", "apply", "configure"]
+    text_lower = kb_entry_text.lower()
+    specificity_hits = sum(1 for kw in solution_keywords if kw in text_lower)
+    specificity_score = min(1.0, specificity_hits / 3)
+
+    return round(
+        relevance_score * 0.35 +
+        length_score * 0.30 +
+        specificity_score * 0.35,
+        2
     )

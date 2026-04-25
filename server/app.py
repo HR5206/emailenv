@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Any, Dict, List, Optional
 
+from helpdeskenv_class import HelpdeskEnv
 from emailenv_class import EmailEnv
 from models import (
 	Action,
@@ -15,7 +16,11 @@ from models import (
 	EmailTask,
 	EnvState,
 	AgentAction,
+	HelpdeskAction,
+	HelpdeskEnvState,
+	AgentRole,
 )
+
 
 # Configure structured logging
 logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -26,8 +31,9 @@ API_BASE_URL: str = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
 MODEL_NAME: str = os.getenv("MODEL_NAME", "gpt-5-nano")
 LOCAL_IMAGE_NAME: str = os.getenv("LOCAL_IMAGE_NAME", "")
 
-app = FastAPI(title="EmailEnv", version="1.0.0")
-_env = EmailEnv()
+app = FastAPI(title="HelpdeskEnv", version="2.0.0")
+_env = HelpdeskEnv()
+_email_env = EmailEnv()  # Keep backward compat
 
 
 class ResetRequest(BaseModel):
@@ -77,24 +83,33 @@ async def health() -> Dict[str, str]:
 async def metadata() -> Dict[str, Any]:
 	"""Environment metadata — required by OpenEnv validator."""
 	return {
-		"name": "EmailEnv",
-		"description": "An OpenEnv-compliant environment for professional email triage and customer support, including spam detection, prioritization, and reply generation.",
-		"version": "1.0.0",
-		"author": "EmailEnv Maintainers",
+		"name": "HelpdeskEnv",
+		"description": "A multi-agent OpenEnv environment simulating an IT helpdesk with triage, tiered support, SLA tracking, and self-improving Knowledge Base.",
+		"version": "2.0.0",
+		"author": "HelpdeskEnv Maintainers",
 	}
+
 
 
 @app.get("/schema")
 async def schema() -> Dict[str, Any]:
 	"""Action/observation/state schemas — required by OpenEnv validator."""
-	return {
+		return {
 		"action": {
 			"type": "object",
 			"properties": {
-				"type": {"type": "string", "enum": ["classify_spam", "set_priority", "generate_reply", "skip"]},
+				"type": {"type": "string", "enum": [
+					"classify_spam", "set_priority", "generate_reply", "skip",
+					"classify_category", "assign_tier", "search_kb", "apply_solution",
+					"respond_to_customer", "escalate", "request_info", "diagnose",
+					"deep_diagnose", "apply_fix", "apply_complex_fix", "write_kb_entry"
+				]},
 				"is_spam": {"type": "boolean", "nullable": True},
-				"priority": {"type": "string", "enum": ["low", "medium", "high"], "nullable": True},
+				"priority": {"type": "string", "enum": ["low", "medium", "high", "critical"], "nullable": True},
 				"reply_text": {"type": "string", "nullable": True},
+				"agent_role": {"type": "string", "enum": ["triage", "l1", "l2", "l3"], "nullable": True},
+				"ticket_id": {"type": "string", "nullable": True},
+				"action_value": {"type": "string", "nullable": True},
 			},
 			"required": ["type"],
 		},
@@ -107,18 +122,27 @@ async def schema() -> Dict[str, Any]:
 				"sender": {"type": "string"},
 				"body": {"type": "string"},
 				"context": {"type": "string", "nullable": True},
+				"ticket_id": {"type": "string"},
+				"category": {"type": "string"},
+				"current_agent": {"type": "string", "nullable": True},
 			},
 		},
 		"state": {
 			"type": "object",
 			"properties": {
 				"current_task": {"type": "object", "nullable": True},
+				"current_ticket": {"type": "object", "nullable": True},
+				"current_agent": {"type": "string", "nullable": True},
 				"task_number": {"type": "integer"},
+				"ticket_number": {"type": "integer"},
 				"total_reward": {"type": "number"},
 				"is_done": {"type": "boolean"},
+				"kb_entries_added": {"type": "integer"},
+				"escalation_count": {"type": "integer"},
 			},
 		},
 	}
+
 
 
 @app.get("/tasks")
@@ -158,7 +182,41 @@ async def tasks() -> List[Dict[str, Any]]:
 				"function": "grade_reply",
 			},
 		},
+		{
+			"id": "ticket_triage",
+			"name": "Ticket Triage",
+			"description": "Classify incoming ticket: category, priority, and support tier.",
+			"difficulty": "easy",
+			"grader": {
+				"type": "python",
+				"path": "graders.py",
+				"function": "grade_triage",
+			},
+		},
+		{
+			"id": "ticket_resolution",
+			"name": "Ticket Resolution",
+			"description": "Resolve IT support tickets through diagnosis and solution application.",
+			"difficulty": "medium",
+			"grader": {
+				"type": "python",
+				"path": "graders.py",
+				"function": "grade_reply",
+			},
+		},
+		{
+			"id": "kb_contribution",
+			"name": "Knowledge Base Contribution",
+			"description": "Document novel solutions for future retrieval — self-improvement mechanism.",
+			"difficulty": "hard",
+			"grader": {
+				"type": "python",
+				"path": "graders.py",
+				"function": "grade_kb_contribution",
+			},
+		},
 	]
+
 
 
 @app.post("/mcp")
@@ -168,7 +226,7 @@ async def mcp(body: Dict[str, Any] = Body(default={})) -> Dict[str, Any]:
 		"jsonrpc": "2.0",
 		"id": body.get("id", 1),
 		"result": {
-			"name": "EmailEnv",
+			"name": "HelpdeskEnv",
 			"description": "Email triage environment",
 		},
 	}
@@ -317,6 +375,20 @@ async def state() -> EnvState:
 	"""Return the current environment state."""
 	return _env.state()
 
+@app.get("/kb")
+async def get_kb():
+	"""Return the current Knowledge Base contents and stats."""
+	return {
+		"entries": [e.model_dump() for e in _env.kb().get_all()],
+		"stats": _env.kb().stats(),
+	}
+
+@app.post("/kb/search")
+async def search_kb(body: dict = Body(...)):
+	"""Search the Knowledge Base."""
+	query = body.get("query", "")
+	results = _env.kb().search(query)
+	return {"results": [r.model_dump() for r in results]}
 
 def main():
 	import uvicorn
