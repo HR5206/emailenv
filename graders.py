@@ -278,41 +278,32 @@ def grade_reply(task: EmailTask, action: AgentAction) -> StepResult:
 # ============================================================================
 
 def grade_triage(ticket, action):
-    """
-    Grades the Triage agent's classification.
-
-    Scoring:
-    - category_correct (0 or 1) x 0.4
-    - priority_correct (0, 0.5, or 1) x 0.3   — reuses PRIORITY_SCALE logic
-    - tier_correct (0 or 1) x 0.3
-    """
+    import json
+    try:
+        parsed = json.loads(action.action_value)
+    except Exception:
+        parsed = {}
+    submitted_category = parsed.get("category", "").strip().lower()
+    submitted_priority = parsed.get("priority", "").strip().lower()
+    submitted_tier = parsed.get("tier", "").strip().lower()
     scores = {}
-
-    # Category match
-    if action.action_value == ticket.category.value:
-        scores["category"] = 1.0
-    else:
-        scores["category"] = 0.0
-
-    # Priority match — reuse existing scale logic
-    submitted_priority = action.action_value
+    correct_category = ticket.category.value
+    scores["category"] = 1.0 if submitted_category == correct_category else 0.0
     correct_priority = ticket.ground_truth_priority.value
-
-    # Tier match
-    # Similar binary check
-
-    reward = (scores.get("category", 0) * 0.4 +
-              scores.get("priority", 0) * 0.3 +
-              scores.get("tier", 0) * 0.3)
-
+    if submitted_priority in PRIORITY_SCALE and correct_priority in PRIORITY_SCALE:
+        distance = abs(PRIORITY_SCALE[submitted_priority] - PRIORITY_SCALE[correct_priority])
+        scores["priority"] = 1.0 if distance == 0 else (0.5 if distance == 1 else 0.0)
+    else:
+        scores["priority"] = 0.0
+    correct_tier = ticket.ground_truth_tier.value
+    scores["tier"] = 1.0 if submitted_tier == correct_tier else 0.0
+    reward = (scores["category"] * 0.4 + scores["priority"] * 0.3 + scores["tier"] * 0.3)
     return StepResult(
         task_id=ticket.ticket_id,
         reward=round(reward, 2),
         done=False,
         feedback=f"Triage scores: {scores}",
-        correct_answer=f"category={ticket.category.value}, "
-                       f"priority={ticket.ground_truth_priority.value}, "
-                       f"tier={ticket.ground_truth_tier.value}"
+        correct_answer=f"category={correct_category}, priority={correct_priority}, tier={correct_tier}"
     )
 
 
@@ -358,3 +349,13 @@ def grade_kb_contribution(kb_entry_text: str, ticket) -> float:
         specificity_score * 0.35,
         2
     )
+
+if __name__ == "__main__":
+    print("PRIORITY_SCALE:", PRIORITY_SCALE)
+    assert "critical" in PRIORITY_SCALE
+    assert PRIORITY_SCALE["critical"] == 3
+    print("Priority grader: 4-level scale OK")
+    eff = grade_efficiency(3, 5, 1)
+    print(f"grade_efficiency(3, 5, 1) = {eff}")
+    assert 0.0 <= eff <= 1.0
+    print("All grader tests passed!")

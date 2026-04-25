@@ -94,7 +94,7 @@ async def metadata() -> Dict[str, Any]:
 @app.get("/schema")
 async def schema() -> Dict[str, Any]:
 	"""Action/observation/state schemas — required by OpenEnv validator."""
-		return {
+	return {
 		"action": {
 			"type": "object",
 			"properties": {

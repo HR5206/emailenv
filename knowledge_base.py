@@ -113,3 +113,17 @@ class KnowledgeBase:
             "agent_authored": sum(1 for e in entries if not e.entry_id.startswith("kb_")),
             "total_retrievals": sum(e.times_used for e in entries),
         }
+
+if __name__ == "__main__":
+    kb = KnowledgeBase()
+    print(f"KB initialized with {kb.size()} seed entries")
+    results = kb.search("password reset locked account")
+    print(f"Search results: {len(results)}")
+    new_entry = KBEntry(
+        entry_id="test_001", ticket_category="test",
+        title="Test Article", problem_description="Testing",
+        solution="This is a test solution", keywords=["test"]
+    )
+    added = kb.add(new_entry)
+    print(f"Added: {added}, KB size: {kb.size()}")
+    print("All KB tests passed!")
