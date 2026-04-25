@@ -252,7 +252,7 @@ class HelpdeskEnvState(BaseModel):
 class HelpdeskResetResponse(BaseModel):
     """Returned when the helpdesk environment is reset."""
     ticket: Ticket = Field(..., description="The first ticket to process")
-    current_agent: str = Field(default="triage", description="Starting agent role")
+    current_agent: AgentRole = Field(default=AgentRole.TRIAGE, description="Starting agent role")
     total_tickets: int = Field(..., description="How many tickets in this episode")
     kb_size: int = Field(default=0, description="Current KB entry count")
     available_tasks: list[str] = Field(

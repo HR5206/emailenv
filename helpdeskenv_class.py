@@ -122,8 +122,9 @@ class HelpdeskEnv:
             result = self._handle_kb_search(ticket, action)
         elif action.action_type == "write_kb_entry":
             result = self._handle_kb_write(ticket, action)
+        elif action.action_type == "respond_to_customer":
+            result = self._handle_respond_to_customer(ticket, action)
         elif action.action_type in (
-            "respond_to_customer",
             "apply_solution",
             "apply_fix",
             "apply_complex_fix",
@@ -295,6 +296,53 @@ class HelpdeskEnv:
             done=False,
             feedback=feedback,
             correct_answer=None,
+        )
+
+    # ----- Respond to Customer -----
+
+    def _handle_respond_to_customer(
+        self, ticket: Ticket, action: HelpdeskAction
+    ) -> StepResult:
+        # Create EmailTask-compatible wrapper for grade_reply
+        temp_task = EmailTask(
+            task_id=ticket.ticket_id,
+            task_type="reply",
+            subject=ticket.subject,
+            sender=ticket.sender,
+            body=ticket.body,
+            context=ticket.context,
+            ground_truth=ticket.ground_truth_resolution,
+        )
+        temp_action = AgentAction(
+            task_id=ticket.ticket_id,
+            action_value=action.action_value,
+        )
+
+        reply_result = grade_reply(temp_task, temp_action)
+
+        eff = grade_efficiency(
+            self._state.steps_on_current_ticket,
+            ticket.sla_steps,
+            self._state.escalation_count,
+        )
+
+        final = round(reply_result.reward * 0.7 + eff * 0.3, 2)
+        final = min(1.0, max(0.0, final))
+
+        self._ticket_resolved = True
+
+        return StepResult(
+            task_id=ticket.ticket_id,
+            reward=final,
+            done=False,
+            feedback=(
+                f"Customer response by {action.agent_role.value}.\n"
+                f"  Reply quality: {reply_result.reward:.2f}\n"
+                f"  Efficiency: {eff:.2f}\n"
+                f"  Final reward: {final:.2f}\n"
+                f"  {reply_result.feedback}"
+            ),
+            correct_answer=ticket.ground_truth_resolution,
         )
 
     # ----- Resolution -----
